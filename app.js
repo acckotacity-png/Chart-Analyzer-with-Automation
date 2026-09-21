@@ -273,6 +273,7 @@ let stockChartInstance = null;
 let liveDataInterval = null;
 let upstoxWebSocket = null;
 let wsReconnectTimeout = null;
+let priceAlerts = JSON.parse(localStorage.getItem("stock_price_alerts") || "[]");
 let currentStockSearchQuery = "";
 let currentChartMode = "tradingview";
 
@@ -629,6 +630,8 @@ function selectStock(stock) {
   if (quickSelect) {
     quickSelect.value = stock.symbol;
   }
+  subscribeToCurrentStock();
+  renderActiveAlertsList();
 }
 
 function renderSelectedStock(stock) {
@@ -1463,6 +1466,9 @@ function applyPriceTick(newPrice, tickVolume) {
     listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
     listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
   }
+
+  // Check price threshold alerts
+  checkPriceAlerts(selectedStock.symbol, selectedStock.price, prevPrice);
 }
 
 function startLivePriceStream() {
@@ -1700,6 +1706,186 @@ async function testSupabaseConnection() {
       statusElem.innerHTML = `<span style="color:var(--red);"><i class="fa-solid fa-circle-xmark"></i> कनेक्शन विफल: ${err.message}</span>`;
     }
   }
+}
+
+// -------------------------------------------------------------
+// PRICE ALERTS & NON-INTRUSIVE TOAST NOTIFICATIONS
+// -------------------------------------------------------------
+function openSetAlertModal() {
+  if (!selectedStock) return;
+  const modal = document.getElementById("setAlertModal");
+  if (!modal) return;
+
+  const symbolElem = document.getElementById("alertStockSymbol");
+  const nameElem = document.getElementById("alertStockName");
+  const priceElem = document.getElementById("alertCurrentPrice");
+  const thresholdInput = document.getElementById("alertThresholdPrice");
+
+  if (symbolElem) symbolElem.innerText = selectedStock.symbol;
+  if (nameElem) nameElem.innerText = selectedStock.name;
+  if (priceElem) priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+  if (thresholdInput) {
+    thresholdInput.value = selectedStock.price.toFixed(2);
+    thresholdInput.focus();
+  }
+
+  renderActiveAlertsList();
+  modal.classList.remove("hidden");
+}
+
+function closeSetAlertModal() {
+  const modal = document.getElementById("setAlertModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function saveStockAlert() {
+  if (!selectedStock) return;
+  const condition = document.getElementById("alertCondition").value;
+  const thresholdInput = document.getElementById("alertThresholdPrice");
+  const threshold = parseFloat(thresholdInput.value);
+
+  if (isNaN(threshold) || threshold <= 0) {
+    showToast("Invalid Price", "कृपया एक वैध मूल्य दर्ज करें।", "red");
+    return;
+  }
+
+  const newAlert = {
+    id: "alert_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+    symbol: selectedStock.symbol,
+    condition: condition, // 'gte' or 'lte'
+    threshold: threshold,
+    createdAt: new Date().toISOString(),
+    createdPrice: selectedStock.price
+  };
+
+  priceAlerts.push(newAlert);
+  localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+
+  renderActiveAlertsList();
+  showToast(
+    `Alert Set: ${selectedStock.symbol}`,
+    `जब मूल्य ₹${threshold.toFixed(2)} (${condition === 'gte' ? '≥' : '≤'}) पहुंचेगा, तब अलर्ट प्राप्त होगा।`,
+    "green"
+  );
+  closeSetAlertModal();
+}
+
+function removeStockAlert(alertId) {
+  priceAlerts = priceAlerts.filter(a => a.id !== alertId);
+  localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+  renderActiveAlertsList();
+  showToast("Alert Removed", "अलर्ट सफलतापूर्वक हटा दिया गया।", "red");
+}
+
+function renderActiveAlertsList() {
+  const listContainer = document.getElementById("activeAlertsList");
+  if (!listContainer || !selectedStock) return;
+
+  const currentStockAlerts = priceAlerts.filter(a => a.symbol === selectedStock.symbol);
+  if (currentStockAlerts.length === 0) {
+    listContainer.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); padding: 4px 0;">इस स्टॉक के लिए कोई सक्रिय अलर्ट नहीं है।</div>`;
+    return;
+  }
+
+  listContainer.innerHTML = currentStockAlerts.map(a => `
+    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 6px 10px; border-radius: 6px; font-size: 11px; border: 1px solid var(--border);">
+      <div>
+        <span style="font-weight: 700; color: var(--cyan);">${a.symbol}</span>
+        <span style="color: var(--text-muted); margin: 0 4px;">${a.condition === 'gte' ? '≥' : '≤'}</span>
+        <span style="font-weight: 700; color: ${a.condition === 'gte' ? 'var(--green)' : 'var(--red)'};">₹${a.threshold.toFixed(2)}</span>
+      </div>
+      <button class="btn-sm btn-red" style="padding: 2px 6px; font-size: 10px;" onclick="removeStockAlert('${a.id}')">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+  `).join("");
+}
+
+function checkPriceAlerts(symbol, currentPrice, prevPrice) {
+  if (!priceAlerts || priceAlerts.length === 0) return;
+
+  const matchedAlerts = [];
+  const remainingAlerts = [];
+
+  priceAlerts.forEach(alert => {
+    if (alert.symbol !== symbol) {
+      remainingAlerts.push(alert);
+      return;
+    }
+
+    let triggered = false;
+    if (alert.condition === "gte" && currentPrice >= alert.threshold) {
+      triggered = true;
+    } else if (alert.condition === "lte" && currentPrice <= alert.threshold) {
+      triggered = true;
+    }
+
+    if (triggered) {
+      matchedAlerts.push(alert);
+    } else {
+      remainingAlerts.push(alert);
+    }
+  });
+
+  if (matchedAlerts.length > 0) {
+    priceAlerts = remainingAlerts;
+    localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+
+    matchedAlerts.forEach(a => {
+      const isAbove = a.condition === "gte";
+      const icon = isAbove ? "fa-arrow-trend-up" : "fa-arrow-trend-down";
+      const colorType = isAbove ? "green" : "red";
+      showToast(
+        `🚨 Price Alert: ${a.symbol}`,
+        `वर्तमान मूल्य ₹${currentPrice.toFixed(2)} लक्ष्य ₹${a.threshold.toFixed(2)} के पार (${isAbove ? '≥' : '≤'}) पहुंच चुका है!`,
+        colorType
+      );
+    });
+
+    // Refresh modal list if open
+    const modal = document.getElementById("setAlertModal");
+    if (modal && !modal.classList.contains("hidden")) {
+      renderActiveAlertsList();
+    }
+  }
+}
+
+// Non-intrusive Toast Notification Handler
+function showToast(title, message, type = "cyan") {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast-alert ${type === "green" ? "green" : type === "red" ? "red" : ""}`;
+
+  let iconHtml = '<i class="fa-solid fa-bell" style="color:var(--cyan); font-size:16px; margin-top:2px;"></i>';
+  if (type === "green") {
+    iconHtml = '<i class="fa-solid fa-circle-check" style="color:var(--green); font-size:16px; margin-top:2px;"></i>';
+  } else if (type === "red") {
+    iconHtml = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red); font-size:16px; margin-top:2px;"></i>';
+  }
+
+  toast.innerHTML = `
+    ${iconHtml}
+    <div style="flex: 1;">
+      <div style="font-weight: 700; font-size: 13px; margin-bottom: 2px; color: var(--text);">${title}</div>
+      <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">${message}</div>
+    </div>
+    <button style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 12px;" onclick="this.parentElement.remove()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  // Auto-dismiss after 5.5 seconds with fade-out
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(10px) scale(0.95)";
+    setTimeout(() => {
+      if (toast.parentElement) toast.remove();
+    }, 320);
+  }, 5500);
 }
 
 async function loadAdminUsers() {

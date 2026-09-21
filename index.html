@@ -404,6 +404,53 @@
       box-shadow: 0 10px 40px rgba(0, 229, 255, 0.2);
     }
 
+    /* Non-intrusive Toast Notification Container */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 360px;
+      pointer-events: none;
+    }
+    .toast-alert {
+      background: rgba(18, 26, 43, 0.95);
+      border: 1px solid var(--cyan);
+      border-left: 4px solid var(--cyan);
+      backdrop-filter: blur(8px);
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: var(--text);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .toast-alert.green {
+      border-left-color: var(--green);
+      border-color: rgba(0, 230, 118, 0.4);
+    }
+    .toast-alert.red {
+      border-left-color: var(--red);
+      border-color: rgba(255, 61, 113, 0.4);
+    }
+    @keyframes toastSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -607,6 +654,9 @@
               <div class="indicator-pill active" id="pill_vol" onclick="toggleIndicator('volume')">
                 <i class="fa-solid fa-chart-simple" style="color:var(--cyan)"></i> Volume
               </div>
+              <button class="tab-btn" id="btnSetAlert" style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Set Real-Time Price Alert for Selected Stock">
+                <i class="fa-solid fa-bell"></i> Set Alert
+              </button>
               <button class="tab-btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="openSupabaseModal()" title="Upstox API V3 & Supabase Edge Function Settings">
                 <i class="fa-solid fa-shield-halved"></i> Data Bridge
               </button>
@@ -787,6 +837,63 @@
         </div>
       </div>
     </div>
+
+    <!-- SET ALERT MODAL -->
+    <div id="setAlertModal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width: 440px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <h3 style="font-size: 16px; margin: 0; color: var(--amber); display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-bell"></i> Set Price Alert
+          </h3>
+          <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 12px;" onclick="closeSetAlertModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div style="background: var(--card-elevated); padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div id="alertStockSymbol" style="font-size: 16px; font-weight: 800; color: var(--text);">RELIANCE</div>
+            <div id="alertStockName" style="font-size: 11px; color: var(--text-muted);">Reliance Industries Ltd</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 10px; color: var(--text-muted);">Current Price</div>
+            <div id="alertCurrentPrice" style="font-size: 16px; font-weight: 800; color: var(--cyan);">₹1,240.30</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 11px;">Condition</label>
+          <select id="alertCondition" class="form-control" style="font-size: 12px;">
+            <option value="gte">Price crosses ABOVE or EQUAL (≥)</option>
+            <option value="lte">Price crosses BELOW or EQUAL (≤)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label style="font-size: 11px;">Target Threshold Price (₹)</label>
+          <input type="number" step="0.05" id="alertThresholdPrice" class="form-control" style="font-size: 13px; font-weight: 700;" placeholder="Enter target price">
+        </div>
+
+        <div id="activeAlertsListWrap" style="margin-bottom: 14px;">
+          <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 6px;">Active Alerts for this Stock:</label>
+          <div id="activeAlertsList" style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+            <!-- Rendered via JavaScript -->
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="flex: 1; font-size: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #d97706; color: #000; font-weight: 700;" onclick="saveStockAlert()">
+            <i class="fa-solid fa-check"></i> Set Alert
+          </button>
+          <button class="btn btn-secondary" style="font-size: 12px;" onclick="closeSetAlertModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NON-INTRUSIVE TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="toast-container"></div>
   </main>
 
   <script src="app.js"></script>
