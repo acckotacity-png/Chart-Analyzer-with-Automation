@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chart Analyzer Pro - AI Stock Screener & Approval Portal</title>
+  <meta name="theme-color" content="#0d1117">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131b2e;
+      --card-elevated: #1a253f;
+      --border: #233252;
+      --cyan: #00e5ff;
+      --green: #00e676;
+      --red: #ff3d71;
+      --amber: #ffaa00;
+      --text: #f0f4f8;
+      --text-muted: #8899ac;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--cyan); }
+    .brand i { font-size: 20px; }
+
+    .user-pill {
+      background: var(--card-elevated);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge.approved { background: rgba(0, 230, 118, 0.2); color: var(--green); }
+    .badge.pending { background: rgba(255, 170, 0, 0.2); color: var(--amber); }
+
+    main { flex: 1; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    h2 { font-size: 18px; margin-bottom: 12px; color: var(--cyan); display: flex; align-items: center; gap: 8px; }
+    p { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+
+    .form-group { margin-bottom: 14px; text-align: left; }
+    .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+    .form-control {
+      width: 100%;
+      padding: 12px 14px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    .form-control:focus { border-color: var(--cyan); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--cyan);
+      color: #000;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-secondary { background: var(--card-elevated); color: var(--text); border: 1px solid var(--border); }
+    .btn-green { background: var(--green); color: #000; }
+    .btn-red { background: var(--red); color: #fff; }
+
+    .switch-link { text-align: center; margin-top: 14px; font-size: 12px; color: var(--cyan); cursor: pointer; }
+
+    /* Admin Table */
+    .user-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .user-table th, .user-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .user-table th { color: var(--text-muted); font-weight: 600; }
+
+    .action-btn-group { display: flex; gap: 6px; }
+    .btn-sm { padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer; font-weight: 600; border: none; }
+
+    /* Market Preview Card */
+    .stock-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 14px; }
+    .stock-box {
+      background: var(--card-elevated);
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .stock-box .sym { font-weight: 700; font-size: 15px; }
+    .stock-box .price { font-size: 18px; font-weight: 800; margin-top: 6px; }
+    .stock-box .gain { color: var(--green); font-size: 12px; font-weight: 600; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <i class="fa-solid fa-chart-line"></i>
+      <span>Chart Analyzer Pro</span>
+    </div>
+    <div id="userHeader" class="user-pill hidden">
+      <span id="headerUserName">Admin</span>
+      <span id="headerUserStatus" class="badge approved">Approved</span>
+      <i class="fa-solid fa-right-from-bracket" style="cursor:pointer;" onclick="logout()" title="Logout"></i>
+    </div>
+  </header>
+
+  <main>
+    <!-- LOGIN / REGISTRATION GATE -->
+    <div id="authGate" class="card" style="max-width: 440px; margin: 40px auto; text-align: center;">
+      <i class="fa-solid fa-shield-halved" style="font-size: 48px; color: var(--cyan); margin-bottom: 16px;"></i>
+      <h2 style="justify-content: center;">Access Authorization</h2>
+      <p>सुपाबेस ऑथराइज़ेशन: नया यूजर रिक्वेस्ट भेजेगा और एडमिन राइट्स (Approval) मिलने पर ही एक्सेस होगा।</p>
+
+      <!-- REGISTRATION FORM -->
+      <form id="registerForm" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label>पूरा नाम (Full Name)</label>
+          <input type="text" id="regName" class="form-control" placeholder="उदा. राहुल शर्मा" required>
+        </div>
+        <div class="form-group">
+          <label>मोबाइल नंबर (Mobile Number)</label>
+          <input type="tel" id="regMobile" class="form-control" placeholder="9876543210" required>
+        </div>
+        <div class="form-group">
+          <label>ईमेल आईडी (Email ID)</label>
+          <input type="email" id="regEmail" class="form-control" placeholder="rahul@example.com" required>
+        </div>
+        <button type="submit" class="btn"><i class="fa-solid fa-paper-plane"></i> Request Admin Approval</button>
+        <div class="switch-link" onclick="toggleAuth(false)">Already registered? Login / Check Status</div>
+      </form>
+
+      <!-- LOGIN FORM -->
+      <form id="loginForm" class="hidden" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>ईमेल या मोबाइल नंबर (Email or Phone)</label>
+          <input type="text" id="loginIdentifier" class="form-control" placeholder="arjunmalviya166@gmail.com" required>
+        </div>
+        <button type="submit" class="btn"><i class="fa-solid fa-arrow-right-to-bracket"></i> Login / Status Check</button>
+        <div class="switch-link" onclick="toggleAuth(true)">New user? Register with Name & Mobile</div>
+      </form>
+
+      <!-- Quick Admin Login Link -->
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border);">
+        <button class="btn btn-secondary" style="font-size: 12px; padding: 8px;" onclick="adminQuickLogin()">
+          <i class="fa-solid fa-user-shield" style="color:var(--cyan)"></i> Quick Login as Admin (Arjun)
+        </button>
+      </div>
+
+      <div id="authAlert" style="margin-top: 14px; font-size: 13px; font-weight: 600;"></div>
+    </div>
+
+    <!-- PENDING APPROVAL NOTICE FOR USERS -->
+    <div id="pendingGate" class="card hidden" style="max-width: 500px; margin: 40px auto; text-align: center; border-color: var(--amber);">
+      <i class="fa-solid fa-hourglass-half" style="font-size: 48px; color: var(--amber); margin-bottom: 14px;"></i>
+      <h2 style="justify-content: center; color: var(--amber);">Approval Pending / अप्रूवल पेंडिंग</h2>
+      <p style="color: var(--text); font-size: 14px;" id="pendingMessage">
+        आपकी रिक्वेस्ट एडमिन के पास सुरक्षित पहुँच चुकी है। जैसे ही एडमिन आपको Rights देंगे, आपका लॉगिन सक्रिय हो जाएगा।
+      </p>
+      <div style="display:flex; gap: 10px; margin-top: 20px;">
+        <button class="btn" onclick="checkActiveStatus()"><i class="fa-solid fa-rotate"></i> Check Status Again</button>
+        <button class="btn btn-secondary" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- MAIN APP DASHBOARD (SHOWN ONLY WHEN APPROVED) -->
+    <div id="appDashboard" class="hidden">
+      <!-- Admin Rights Panel (Visible only if user role == 'admin') -->
+      <div id="adminPanel" class="card hidden" style="border-color: var(--cyan);">
+        <h2><i class="fa-solid fa-crown"></i> Admin Rights & User Approval Portal</h2>
+        <p>यहाँ सभी यूज़र्स की लिस्ट है। नए यूज़र्स को <b>Approve</b> करके तुरंत Rights दें:</p>
+        
+        <div style="overflow-x: auto;">
+          <table class="user-table">
+            <thead>
+              <tr>
+                <th>User Details</th>
+                <th>Mobile</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <!-- Dynamically populated from Supabase -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Stock Screener & AI Analysis -->
+      <div class="card">
+        <h2><i class="fa-solid fa-fire"></i> Live Indian Market Screener</h2>
+        <p>Real-time Alpha Vantage quotes with 14-RSI, 20-EMA, 50-SMA & Gemini AI Buy/Hold/Sell insights:</p>
+
+        <div class="stock-grid">
+          <div class="stock-box">
+            <div class="sym">RELIANCE (NSE)</div>
+            <div class="price">₹2,980.50</div>
+            <div class="gain">+1.85% (Strong Uptrend)</div>
+            <div style="font-size: 11px; color: var(--cyan); margin-top:6px;">RSI: 64.2 • 20 EMA: ₹2,940</div>
+          </div>
+          <div class="stock-box">
+            <div class="sym">TCS (NSE)</div>
+            <div class="price">₹3,950.00</div>
+            <div class="gain">+1.15% (Bullish Momentum)</div>
+            <div style="font-size: 11px; color: var(--cyan); margin-top:6px;">RSI: 62.5 • MACD: Crossover</div>
+          </div>
+          <div class="stock-box">
+            <div class="sym">HDFCBANK (NSE)</div>
+            <div class="price">₹1,640.20</div>
+            <div class="gain">+0.80% (Accumulation)</div>
+            <div style="font-size: 11px; color: var(--cyan); margin-top:6px;">RSI: 58.1 • 50 SMA: ₹1,615</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="public/app.js"></script>
+  <script>
+    // Fallback if public/app.js is in same folder
+    if (typeof SUPABASE_URL === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'app.js';
+      document.body.appendChild(s);
+    }
+  </script>
+</body>
+</html>
