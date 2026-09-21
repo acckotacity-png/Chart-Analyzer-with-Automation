@@ -94,7 +94,9 @@ const STOCKS = [
 
 let selectedStock = STOCKS[0];
 let stockChartInstance = null;
+let liveDataInterval = null;
 
+// Initialize on load
 window.addEventListener("DOMContentLoaded", () => {
   if (currentUser) {
     checkActiveStatus();
@@ -233,7 +235,11 @@ async function checkActiveStatus() {
     } else {
       document.getElementById("adminPanel").classList.add("hidden");
     }
-    initDashboardShares();
+    
+    // Defer chart canvas initialization until after the dashboard view is fully displayed and measured
+    requestAnimationFrame(() => {
+      initDashboardShares();
+    });
   } else {
     showView("pending");
     document.getElementById("pendingMessage").innerText = 
@@ -242,11 +248,21 @@ async function checkActiveStatus() {
 }
 
 function initDashboardShares() {
+  // Security guard: ensure user is authenticated and approved
+  if (!currentUser || currentUser.status !== "approved") {
+    console.warn("Unauthorized attempt to initialize chart and share data.");
+    destroyActiveChart();
+    showView("auth");
+    return;
+  }
+
   renderSharesList();
   renderSelectedStock(selectedStock);
+  startLivePriceStream();
 }
 
 function renderSharesList() {
+  if (!currentUser || currentUser.status !== "approved") return;
   const container = document.getElementById("stocksListContainer");
   if (!container) return;
   container.innerHTML = "";
@@ -276,12 +292,14 @@ function renderSharesList() {
 }
 
 function selectStock(stock) {
+  if (!currentUser || currentUser.status !== "approved") return;
   selectedStock = stock;
   renderSharesList();
   renderSelectedStock(stock);
 }
 
 function renderSelectedStock(stock) {
+  if (!currentUser || currentUser.status !== "approved") return;
   document.getElementById("selectedStockSymbol").innerText = stock.symbol;
   document.getElementById("selectedStockName").innerText = stock.name;
   
@@ -312,18 +330,37 @@ function renderSelectedStock(stock) {
   renderChart(stock);
 }
 
-function renderChart(stock) {
-  const ctx = document.getElementById("stockChartCanvas");
-  if (!ctx) return;
-
+function destroyActiveChart() {
   if (stockChartInstance) {
     stockChartInstance.destroy();
+    stockChartInstance = null;
   }
+}
+
+function renderChart(stock) {
+  // Enforce session check: Chart rendering occurs only for authenticated & approved users
+  if (!currentUser || currentUser.status !== "approved") {
+    destroyActiveChart();
+    return;
+  }
+
+  const canvas = document.getElementById("stockChartCanvas");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  destroyActiveChart();
 
   const labels = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Today"];
   const isPositive = stock.change >= 0;
   const strokeColor = isPositive ? "#00e676" : "#ff3d71";
   const fillColor = isPositive ? "rgba(0, 230, 118, 0.12)" : "rgba(255, 61, 113, 0.12)";
+
+  if (typeof Chart === 'undefined') {
+    console.warn("Chart.js is still loading...");
+    return;
+  }
 
   stockChartInstance = new Chart(ctx, {
     type: "line",
@@ -345,7 +382,7 @@ function renderChart(stock) {
         },
         {
           label: `20 EMA (₹${stock.ema20.toFixed(0)})`,
-          data: stock.chartData.map(v => stock.ema20),
+          data: stock.chartData.map(() => stock.ema20),
           borderColor: "#00e5ff",
           borderWidth: 1.5,
           borderDash: [5, 5],
@@ -357,6 +394,7 @@ function renderChart(stock) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 400 },
       plugins: {
         legend: {
           labels: { color: "#8899ac", font: { size: 11 } }
@@ -380,11 +418,52 @@ function renderChart(stock) {
   });
 }
 
+function startLivePriceStream() {
+  if (liveDataInterval) clearInterval(liveDataInterval);
+
+  // Periodic real-time market tick simulation for approved users
+  liveDataInterval = setInterval(() => {
+    if (!currentUser || currentUser.status !== "approved") {
+      clearInterval(liveDataInterval);
+      return;
+    }
+
+    // Small realistic market price movement (+/- 0.15%)
+    const delta = (Math.random() - 0.48) * (selectedStock.price * 0.002);
+    selectedStock.price = parseFloat((selectedStock.price + delta).toFixed(2));
+    selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
+    selectedStock.changePercent = parseFloat(((selectedStock.change / (selectedStock.price - selectedStock.change)) * 100).toFixed(2));
+
+    // Update last chart candle point
+    if (selectedStock.chartData && selectedStock.chartData.length > 0) {
+      selectedStock.chartData[selectedStock.chartData.length - 1] = selectedStock.price;
+    }
+
+    // Refresh UI elements
+    const priceElem = document.getElementById("selectedStockPrice");
+    const changeElem = document.getElementById("selectedStockChange");
+    if (priceElem && changeElem) {
+      const isPos = selectedStock.change >= 0;
+      priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+      priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
+      changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+      changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
+    }
+
+    // Update Chart without full recreation
+    if (stockChartInstance && stockChartInstance.data && stockChartInstance.data.datasets.length > 0) {
+      stockChartInstance.data.datasets[0].data = selectedStock.chartData;
+      stockChartInstance.update('none');
+    }
+  }, 3500);
+}
+
 function switchTimeframe(tf) {
+  if (!currentUser || currentUser.status !== "approved") return;
+  const eventTarget = window.event ? window.event.target : null;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  event.target.classList.add("active");
+  if (eventTarget) eventTarget.classList.add("active");
   
-  // Slightly adjust chart curve for timeframe representation
   if (selectedStock) {
     if (tf === '1D') {
       selectedStock.chartData = [selectedStock.price - 12, selectedStock.price - 6, selectedStock.price + 4, selectedStock.price - 2, selectedStock.price + 8, selectedStock.price];
@@ -400,7 +479,9 @@ function switchTimeframe(tf) {
 }
 
 async function loadAdminUsers() {
+  if (!currentUser || currentUser.role !== "admin") return;
   const tbody = document.getElementById("userTableBody");
+  if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Loading registered users...</td></tr>`;
 
   try {
@@ -461,6 +542,8 @@ async function updateUserStatus(userId, status) {
 }
 
 function logout() {
+  if (liveDataInterval) clearInterval(liveDataInterval);
+  destroyActiveChart();
   localStorage.removeItem("app_user");
   currentUser = null;
   document.getElementById("userHeader").classList.add("hidden");
