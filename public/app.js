@@ -8,20 +8,22 @@ let currentUser = JSON.parse(localStorage.getItem("app_user") || "null");
 const STOCKS = [
   {
     symbol: "RELIANCE",
+    tvSymbol: "NSE:RELIANCE",
     name: "Reliance Industries Ltd",
-    price: 2865.40,
-    change: 38.20,
-    changePercent: 1.35,
-    rsi: 64.2,
-    ema20: 2820.50,
-    sma50: 2785.00,
-    macd: "Bullish +14.2",
+    price: 1240.30,
+    change: 14.80,
+    changePercent: 1.21,
+    rsi: 62.4,
+    ema20: 1224.50,
+    sma50: 1210.00,
+    macd: "Bullish +4.2",
     signal: "BUY",
-    aiText: "Reliance 20 EMA से ऊपर ट्रेड कर रहा है। RSI 64.2 स्ट्रॉन्ग बुलिश मोमेंटम दिखाता है। स्टॉपलॉस ₹2,810 के साथ बाय कॉल एक्टिव है।",
-    chartData: [2780, 2795, 2810, 2805, 2835, 2840, 2865.40]
+    aiText: "Reliance Industries (पोस्ट-बोनस 1:1) ₹1,240.30 के स्तर पर स्ट्रॉन्ग कंसोलिडेशन के बाद अपट्रेंड में है। 20 EMA (₹1,224.50) पर मजबूत सपोर्ट है। स्टॉपलॉस ₹1,215 के साथ बुलिश मोमेंटम एक्टिव है।",
+    chartData: [1210, 1218, 1225, 1220, 1232, 1236, 1240.30]
   },
   {
     symbol: "TCS",
+    tvSymbol: "NSE:TCS",
     name: "Tata Consultancy Services",
     price: 4125.00,
     change: -18.50,
@@ -36,6 +38,7 @@ const STOCKS = [
   },
   {
     symbol: "TATAMOTORS",
+    tvSymbol: "NSE:TATAMOTORS",
     name: "Tata Motors Ltd",
     price: 978.60,
     change: 24.80,
@@ -50,6 +53,7 @@ const STOCKS = [
   },
   {
     symbol: "INFY",
+    tvSymbol: "NSE:INFY",
     name: "Infosys Ltd",
     price: 1540.25,
     change: 12.30,
@@ -64,6 +68,7 @@ const STOCKS = [
   },
   {
     symbol: "HDFCBANK",
+    tvSymbol: "NSE:HDFCBANK",
     name: "HDFC Bank Ltd",
     price: 1640.20,
     change: 8.50,
@@ -78,6 +83,7 @@ const STOCKS = [
   },
   {
     symbol: "ICICIBANK",
+    tvSymbol: "NSE:ICICIBANK",
     name: "ICICI Bank Ltd",
     price: 1118.50,
     change: 14.20,
@@ -92,6 +98,7 @@ const STOCKS = [
   },
   {
     symbol: "SBIN",
+    tvSymbol: "NSE:SBIN",
     name: "State Bank of India",
     price: 812.30,
     change: 9.40,
@@ -106,6 +113,7 @@ const STOCKS = [
   },
   {
     symbol: "ITC",
+    tvSymbol: "NSE:ITC",
     name: "ITC Limited",
     price: 492.15,
     change: 3.25,
@@ -120,6 +128,7 @@ const STOCKS = [
   },
   {
     symbol: "LT",
+    tvSymbol: "NSE:LT",
     name: "Larsen & Toubro Ltd",
     price: 3620.00,
     change: 45.80,
@@ -134,6 +143,7 @@ const STOCKS = [
   },
   {
     symbol: "BHARTIARTL",
+    tvSymbol: "NSE:BHARTIARTL",
     name: "Bharti Airtel Ltd",
     price: 1485.60,
     change: 21.30,
@@ -152,6 +162,7 @@ let selectedStock = STOCKS[0];
 let stockChartInstance = null;
 let liveDataInterval = null;
 let currentStockSearchQuery = "";
+let currentChartMode = "tradingview";
 
 // Initialize on load (handle both interactive/complete and DOMContentLoaded)
 function initApp() {
@@ -426,7 +437,87 @@ function renderSelectedStock(stock) {
   document.getElementById("aiInsightText").innerText = stock.aiText;
 
   // Render Chart
-  renderChart(stock);
+  if (currentChartMode === "tradingview") {
+    renderTradingViewChart(stock.tvSymbol || `NSE:${stock.symbol}`);
+  } else {
+    renderChart(stock);
+  }
+}
+
+function switchChartMode(mode) {
+  if (!currentUser || currentUser.status !== "approved") return;
+  currentChartMode = mode;
+  const tvBtn = document.getElementById("modeTvBtn");
+  const aiBtn = document.getElementById("modeAiBtn");
+  const tvWrapper = document.getElementById("tvChartWrapper");
+  const aiWrapper = document.getElementById("aiChartWrapper");
+  const aiTimeframeTabs = document.getElementById("aiTimeframeTabs");
+  const tvLiveInfo = document.getElementById("tvLiveInfo");
+
+  if (tvBtn && aiBtn) {
+    tvBtn.classList.toggle("active", mode === "tradingview");
+    aiBtn.classList.toggle("active", mode === "ai");
+  }
+
+  if (tvWrapper && aiWrapper) {
+    tvWrapper.classList.toggle("hidden", mode !== "tradingview");
+    aiWrapper.classList.toggle("hidden", mode !== "ai");
+  }
+
+  if (aiTimeframeTabs) {
+    aiTimeframeTabs.classList.toggle("hidden", mode !== "ai");
+  }
+  if (tvLiveInfo) {
+    tvLiveInfo.classList.toggle("hidden", mode !== "tradingview");
+  }
+
+  if (mode === "tradingview") {
+    renderTradingViewChart(selectedStock.tvSymbol || `NSE:${selectedStock.symbol}`);
+  } else {
+    renderChart(selectedStock);
+  }
+}
+
+function renderTradingViewChart(symbol) {
+  if (!currentUser || currentUser.status !== "approved") return;
+  const container = document.getElementById("tradingview_chart_container");
+  if (!container) return;
+
+  const cleanSymbol = symbol.includes(":") ? symbol : `NSE:${symbol}`;
+  container.innerHTML = "";
+
+  if (typeof TradingView !== 'undefined' && TradingView.widget) {
+    try {
+      new TradingView.widget({
+        "autosize": true,
+        "symbol": cleanSymbol,
+        "interval": "D",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "in",
+        "toolbar_bg": "#111827",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "hide_side_toolbar": false,
+        "withdateranges": true,
+        "save_image": false,
+        "container_id": "tradingview_chart_container"
+      });
+      return;
+    } catch (e) {
+      console.warn("TradingView widget init error, fallback to iframe:", e);
+    }
+  }
+
+  // Reliable iframe fallback
+  const iframe = document.createElement("iframe");
+  iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(cleanSymbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=111827&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in&utm_source=&utm_medium=widget&utm_campaign=chart&utm_term=${encodeURIComponent(cleanSymbol)}`;
+  iframe.style.width = "100%";
+  iframe.style.height = "100%";
+  iframe.style.border = "none";
+  iframe.style.borderRadius = "8px";
+  container.appendChild(iframe);
 }
 
 function destroyActiveChart() {
@@ -688,6 +779,8 @@ async function updateUserStatus(userId, status) {
 function logout() {
   if (liveDataInterval) clearInterval(liveDataInterval);
   destroyActiveChart();
+  const tvContainer = document.getElementById("tradingview_chart_container");
+  if (tvContainer) tvContainer.innerHTML = "";
   localStorage.removeItem("app_user");
   currentUser = null;
   document.getElementById("userHeader").classList.add("hidden");

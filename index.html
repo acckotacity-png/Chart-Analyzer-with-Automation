@@ -8,6 +8,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://s3.tradingview.com/tv.js"></script>
   <style>
     :root {
       --bg: #080c14;
@@ -431,28 +432,43 @@
 
             <div style="text-align: right;">
               <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;"><span class="live-dot"></span>STREAMING</span>
-                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹2,865.40</div>
+                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;"><span class="live-dot"></span>LIVE STREAM</span>
+                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹1,240.30</div>
               </div>
-              <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+38.20 (+1.35%)</div>
+              <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+14.80 (+1.21%)</div>
             </div>
           </div>
 
-          <!-- Timeframe Selector -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div class="timeframe-tabs">
+          <!-- Chart Mode & Controls -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; gap: 6px;">
+              <button id="modeTvBtn" class="tab-btn active" onclick="switchChartMode('tradingview')">
+                <i class="fa-solid fa-chart-candlestick" style="color:var(--cyan)"></i> TradingView Live (असली TV चार्ट)
+              </button>
+              <button id="modeAiBtn" class="tab-btn" onclick="switchChartMode('ai')">
+                <i class="fa-solid fa-chart-line"></i> AI Overview Trend
+              </button>
+            </div>
+            
+            <div id="aiTimeframeTabs" class="timeframe-tabs hidden">
               <button class="tab-btn" onclick="switchTimeframe('1D')">1D</button>
               <button class="tab-btn active" onclick="switchTimeframe('1W')">1W</button>
               <button class="tab-btn" onclick="switchTimeframe('1M')">1M</button>
               <button class="tab-btn" onclick="switchTimeframe('1Y')">1Y</button>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted);">
-              <i class="fa-solid fa-wave-pulse" style="color:var(--cyan);"></i> Real-Time Candle Canvas
+
+            <div id="tvLiveInfo" style="font-size: 11px; color: var(--cyan); display: flex; align-items: center; gap: 6px;">
+              <i class="fa-solid fa-bolt"></i> Real-Time NSE Candlesticks & Live Price
             </div>
           </div>
 
-          <!-- Chart.js Canvas -->
-          <div style="position: relative; height: 280px; width: 100%;">
+          <!-- TradingView Live Chart Wrapper -->
+          <div id="tvChartWrapper" style="position: relative; height: 420px; width: 100%; border-radius: 10px; overflow: hidden; background: #0c121e; border: 1px solid var(--border);">
+            <div id="tradingview_chart_container" style="height: 100%; width: 100%;"></div>
+          </div>
+
+          <!-- AI Chart.js Canvas (Shown in AI Overview mode) -->
+          <div id="aiChartWrapper" class="hidden" style="position: relative; height: 320px; width: 100%;">
             <canvas id="stockChartCanvas"></canvas>
           </div>
 
@@ -460,19 +476,19 @@
           <div class="indicators-row">
             <div class="ind-card">
               <div class="label">RSI (14)</div>
-              <div class="val" id="indRsi">64.2</div>
+              <div class="val" id="indRsi">62.4</div>
             </div>
             <div class="ind-card">
               <div class="label">20 EMA</div>
-              <div class="val" id="indEma">₹2,820</div>
+              <div class="val" id="indEma">₹1,224.50</div>
             </div>
             <div class="ind-card">
               <div class="label">50 SMA</div>
-              <div class="val" id="indSma">₹2,785</div>
+              <div class="val" id="indSma">₹1,210.00</div>
             </div>
             <div class="ind-card">
               <div class="label">MACD</div>
-              <div class="val" id="indMacd" style="color:var(--green)">Bullish +14.2</div>
+              <div class="val" id="indMacd" style="color:var(--green)">Bullish +4.2</div>
             </div>
           </div>
 
