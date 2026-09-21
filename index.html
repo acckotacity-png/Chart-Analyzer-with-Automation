@@ -199,6 +199,61 @@
       .dashboard-layout { grid-template-columns: 1fr; }
     }
 
+    /* Dedicated Latency & Tick Debug Panel */
+    .debug-latency-panel {
+      grid-column: 1 / -1;
+      background: rgba(12, 18, 30, 0.95);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 2px;
+    }
+    .debug-latency-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .debug-latency-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+    .debug-stat-box {
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .debug-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .debug-stat-val {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: monospace;
+      color: var(--cyan);
+    }
+    .debug-stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .latency-good { color: var(--green) !important; }
+    .latency-warn { color: var(--amber) !important; }
+    .latency-bad { color: var(--red) !important; }
+
     .stocks-list { display: flex; flex-direction: column; gap: 8px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
     .stock-item {
       background: var(--card-elevated);
@@ -559,6 +614,73 @@
 
       <!-- MAIN SHARES AND CHART AREA -->
       <div class="dashboard-layout">
+        <!-- DEDICATED WEBSOCKET LATENCY & REAL-TIME TICK DEBUG UI PANEL -->
+        <div class="debug-latency-panel" id="wsLatencyDebugPanel">
+          <div class="debug-latency-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: rgba(0, 229, 255, 0.15); color: var(--cyan); font-size: 11px;">
+                <i class="fa-solid fa-network-wired"></i>
+              </span>
+              <div>
+                <span style="font-weight: 800; font-size: 13px; color: var(--text);">WebSocket Feed & System Latency Diagnostics</span>
+                <span style="font-size: 10px; color: var(--text-muted); margin-left: 6px;">(Server-Side vs Local Render Latency Profiler)</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="debugFeedModeBadge" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 230, 118, 0.12); color: var(--green); border: 1px solid rgba(0, 230, 118, 0.3); font-weight: 700;">
+                <i class="fa-solid fa-circle" style="font-size: 7px; margin-right: 4px;"></i> WS / TICK ACTIVE
+              </span>
+              <button onclick="toggleLatencyDebugPanel()" style="background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer;" title="Minimize / Hide Debug Panel">
+                <i class="fa-solid fa-chevron-up" id="btnToggleDebugIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="debug-latency-grid" id="debugLatencyGridBody">
+            <!-- Stat 1: Total End-to-End Latency -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Total E2E Latency</span>
+              <div class="debug-stat-val latency-good" id="dbgTotalLatency">-- ms</div>
+              <span class="debug-stat-sub" id="dbgLatencyVerdit">Analyzing tick delta...</span>
+            </div>
+
+            <!-- Stat 2: Server-Side Transit Delta -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Server / Network Transit</span>
+              <div class="debug-stat-val" id="dbgServerTransit">-- ms</div>
+              <span class="debug-stat-sub" id="dbgServerSub">Timestamp to arrival</span>
+            </div>
+
+            <!-- Stat 3: Local Processing & Render Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Local Processing & DOM</span>
+              <div class="debug-stat-val latency-good" id="dbgLocalProcess">-- ms</div>
+              <span class="debug-stat-sub">Parse → Calc → Chart update</span>
+            </div>
+
+            <!-- Stat 4: WebSocket Tick Arrival Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Tick Packet Timestamp</span>
+              <div class="debug-stat-val" style="font-size: 13px; color: var(--text);" id="dbgTickTimestamp">--:--:--.---</div>
+              <span class="debug-stat-sub" id="dbgTickOrigin">Exchange / Broker emit time</span>
+            </div>
+
+            <!-- Stat 5: Local Client Clock Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Client Local Time</span>
+              <div class="debug-stat-val" style="font-size: 13px; color: var(--text);" id="dbgClientTime">--:--:--.---</div>
+              <span class="debug-stat-sub">Browser high-res performance clock</span>
+            </div>
+
+            <!-- Stat 6: Last Tick Value & Ticks/Sec -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Tick Rate & Last LTP</span>
+              <div class="debug-stat-val" style="font-size: 14px; color: var(--green);" id="dbgLastTickVal">₹-- (0 tps)</div>
+              <span class="debug-stat-sub" id="dbgTicksReceived">0 ticks evaluated</span>
+            </div>
+          </div>
+        </div>
+
         <!-- LEFT: SHARES LIST -->
         <div class="card" style="padding: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -668,6 +790,9 @@
               <div class="indicator-pill active" id="pill_vol" onclick="toggleIndicator('volume')">
                 <i class="fa-solid fa-chart-simple" style="color:var(--cyan)"></i> Volume
               </div>
+              <button class="tab-btn" id="btnLatencyDebug" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleLatencyDebugPanel()" title="Toggle WebSocket & System Latency Diagnostics Panel">
+                <i class="fa-solid fa-stopwatch"></i> Latency Debug
+              </button>
               <button class="tab-btn" id="btnSetAlert" style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Set Real-Time Price Alert for Selected Stock">
                 <i class="fa-solid fa-bell"></i> Set Alert
               </button>

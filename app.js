@@ -1609,7 +1609,11 @@ function startLivePriceStream() {
     const nextPrice = Math.max(1, +(selectedStock.price + delta).toFixed(2));
     const addedVol = Math.floor(Math.random() * 25 + 5);
 
+    const renderStart = performance.now();
     applyPriceTick(nextPrice, addedVol);
+    const localProcDuration = performance.now() - renderStart;
+
+    updateLatencyDebugUI(null, localProcDuration, Date.now(), nextPrice, "ENGINE");
   }, 2200);
 
   // 3. Market Price Reconciliation Loop: Fetches official Upstox REST API price exactly every 5 seconds,
@@ -1821,9 +1825,142 @@ function subscribeToCurrentStock() {
   }
 }
 
+let latencyMetrics = {
+  totalTicks: 0,
+  lastTickTime: null,
+  ticksThisSecond: 0,
+  tps: 0,
+  lastTotalLatency: null,
+  lastServerTransit: null,
+  lastLocalProcessing: null
+};
+
+// Periodic TPS (ticks per second) counter reset
+setInterval(() => {
+  latencyMetrics.tps = latencyMetrics.ticksThisSecond;
+  latencyMetrics.ticksThisSecond = 0;
+}, 1000);
+
+function toggleLatencyDebugPanel() {
+  const panel = document.getElementById("wsLatencyDebugPanel");
+  const grid = document.getElementById("debugLatencyGridBody");
+  const icon = document.getElementById("btnToggleDebugIcon");
+  if (!panel) return;
+
+  if (grid.style.display === "none") {
+    grid.style.display = "grid";
+    if (icon) icon.className = "fa-solid fa-chevron-up";
+  } else {
+    grid.style.display = "none";
+    if (icon) icon.className = "fa-solid fa-chevron-down";
+  }
+}
+
+function updateLatencyDebugUI(transitMs, localProcMs, tickTimestampMs, ltp, feedType = "WS") {
+  const totalMs = (transitMs !== null && !isNaN(transitMs)) ? (transitMs + localProcMs) : localProcMs;
+  
+  latencyMetrics.totalTicks++;
+  latencyMetrics.ticksThisSecond++;
+  latencyMetrics.lastTotalLatency = totalMs;
+  latencyMetrics.lastServerTransit = transitMs;
+  latencyMetrics.lastLocalProcessing = localProcMs;
+
+  const totalElem = document.getElementById("dbgTotalLatency");
+  const verdictElem = document.getElementById("dbgLatencyVerdit");
+  const transitElem = document.getElementById("dbgServerTransit");
+  const serverSubElem = document.getElementById("dbgServerSub");
+  const localElem = document.getElementById("dbgLocalProcess");
+  const tickTimeElem = document.getElementById("dbgTickTimestamp");
+  const tickOriginElem = document.getElementById("dbgTickOrigin");
+  const clientTimeElem = document.getElementById("dbgClientTime");
+  const tickValElem = document.getElementById("dbgLastTickVal");
+  const ticksCountElem = document.getElementById("dbgTicksReceived");
+  const modeBadge = document.getElementById("debugFeedModeBadge");
+
+  const now = new Date();
+  const clientTimeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+  if (clientTimeElem) clientTimeElem.innerText = clientTimeStr;
+
+  if (totalElem) {
+    totalElem.innerText = `${Math.round(totalMs)} ms`;
+    totalElem.className = "debug-stat-val " + (totalMs < 120 ? "latency-good" : (totalMs < 400 ? "latency-warn" : "latency-bad"));
+  }
+
+  if (verdictElem) {
+    if (transitMs === null || isNaN(transitMs)) {
+      verdictElem.innerHTML = `<span style="color:var(--cyan)">Local tick loop active (&lt;${localProcMs.toFixed(1)}ms)</span>`;
+    } else if (transitMs > 350) {
+      verdictElem.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-cloud-arrow-down"></i> Delay is Server/Network side (${Math.round(transitMs)}ms)</span>`;
+    } else if (localProcMs > 25) {
+      verdictElem.innerHTML = `<span style="color:var(--amber)"><i class="fa-solid fa-desktop"></i> Delay is Local DOM/Render side (${localProcMs.toFixed(1)}ms)</span>`;
+    } else {
+      verdictElem.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Real-Time Synced (Ultra Low Latency)</span>`;
+    }
+  }
+
+  if (transitElem) {
+    if (transitMs !== null && !isNaN(transitMs)) {
+      transitElem.innerText = `${Math.round(transitMs)} ms`;
+      transitElem.className = "debug-stat-val " + (transitMs < 100 ? "latency-good" : (transitMs < 300 ? "latency-warn" : "latency-bad"));
+    } else {
+      transitElem.innerText = `0 ms`;
+      transitElem.className = "debug-stat-val latency-good";
+    }
+  }
+
+  if (serverSubElem) {
+    serverSubElem.innerText = (transitMs !== null && !isNaN(transitMs))
+      ? (transitMs > 300 ? "High transit lag from broker" : "Broker network transit time")
+      : "Direct client-side stream";
+  }
+
+  if (localElem) {
+    localElem.innerText = `${localProcMs.toFixed(1)} ms`;
+    localElem.className = "debug-stat-val " + (localProcMs < 10 ? "latency-good" : (localProcMs < 30 ? "latency-warn" : "latency-bad"));
+  }
+
+  if (tickTimeElem) {
+    if (tickTimestampMs) {
+      const tickDate = new Date(tickTimestampMs);
+      tickTimeElem.innerText = tickDate.toTimeString().split(' ')[0] + '.' + String(tickDate.getMilliseconds()).padStart(3, '0');
+    } else {
+      tickTimeElem.innerText = clientTimeStr;
+    }
+  }
+
+  if (tickOriginElem) {
+    tickOriginElem.innerText = feedType === "WS" ? "Upstox V3 WS packet timestamp" : "High-Frequency Companion Loop";
+  }
+
+  if (tickValElem) {
+    tickValElem.innerText = `₹${ltp.toFixed(2)} (${latencyMetrics.tps} tps)`;
+  }
+
+  if (ticksCountElem) {
+    ticksCountElem.innerText = `${latencyMetrics.totalTicks} ticks profiled (${feedType})`;
+  }
+
+  if (modeBadge) {
+    if (feedType === "WS") {
+      modeBadge.innerHTML = `<i class="fa-solid fa-satellite-dish" style="font-size: 7px; margin-right: 4px;"></i> WS LIVE STREAM`;
+      modeBadge.style.color = "var(--green)";
+      modeBadge.style.borderColor = "rgba(0, 230, 118, 0.3)";
+    } else {
+      modeBadge.innerHTML = `<i class="fa-solid fa-bolt" style="font-size: 7px; margin-right: 4px;"></i> ENGINE STREAM ACTIVE`;
+      modeBadge.style.color = "var(--cyan)";
+      modeBadge.style.borderColor = "rgba(0, 229, 255, 0.3)";
+    }
+  }
+}
+
 function handleUpstoxWsMessage(data) {
   if (!data || !selectedStock) return;
   const currentKey = UPSTOX_INSTRUMENT_KEYS[selectedStock.symbol] || `NSE_EQ|${selectedStock.symbol}`;
+
+  // Capture precise WebSocket message arrival timestamp
+  const wsArrivalTime = performance.now();
+  const clientEpochMs = Date.now();
 
   // Upstox V3 WebSocket feeds return tick packets with feeds object keyed by instrument key
   let feed = null;
@@ -1840,17 +1977,34 @@ function handleUpstoxWsMessage(data) {
   if (feed) {
     let tickPrice = null;
     let tickVol = 0;
+    let packetTimestamp = null;
 
     // Check various Upstox V3 JSON payload structures (Full mode vs LTP mode)
     if (feed.fullFeed && feed.fullFeed.marketFF && feed.fullFeed.marketFF.ltpc) {
       tickPrice = feed.fullFeed.marketFF.ltpc.ltp;
       tickVol = feed.fullFeed.marketFF.v || 0;
+      packetTimestamp = feed.fullFeed.marketFF.ltpc.ltt || feed.fullFeed.marketFF.ltt;
     } else if (feed.ltpc && feed.ltpc.ltp !== undefined) {
       tickPrice = feed.ltpc.ltp;
+      packetTimestamp = feed.ltpc.ltt || feed.ltt;
     } else if (feed.ltp !== undefined) {
       tickPrice = feed.ltp;
+      packetTimestamp = feed.ltt || feed.timestamp;
     } else if (feed.price !== undefined) {
       tickPrice = feed.price;
+      packetTimestamp = feed.timestamp;
+    }
+
+    if (!packetTimestamp && data.timestamp) {
+      packetTimestamp = data.timestamp;
+    }
+
+    // Convert packet timestamp to milliseconds if in seconds
+    let serverTransitMs = null;
+    if (packetTimestamp) {
+      const tsNum = typeof packetTimestamp === 'string' ? parseInt(packetTimestamp, 10) : packetTimestamp;
+      const tickEpochMs = tsNum < 1e11 ? tsNum * 1000 : tsNum;
+      serverTransitMs = Math.max(0, clientEpochMs - tickEpochMs);
     }
 
     if (tickPrice !== null && !isNaN(tickPrice) && tickPrice > 0) {
@@ -1864,7 +2018,14 @@ function handleUpstoxWsMessage(data) {
           return;
         }
       }
+
+      // Execute render and measure local execution duration
+      const renderStart = performance.now();
       applyPriceTick(parsedPrice, tickVol);
+      const localProcDuration = performance.now() - renderStart;
+
+      // Update dedicated latency debug UI panel
+      updateLatencyDebugUI(serverTransitMs, localProcDuration, packetTimestamp, parsedPrice, "WS");
     }
   }
 }
