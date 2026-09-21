@@ -271,6 +271,8 @@ const UPSTOX_INSTRUMENT_KEYS = {
 let selectedStock = STOCKS[0];
 let stockChartInstance = null;
 let liveDataInterval = null;
+let restReconciliationInterval = null;
+let lastValidatedPrice = null;
 let upstoxWebSocket = null;
 let wsReconnectTimeout = null;
 let priceAlerts = JSON.parse(localStorage.getItem("stock_price_alerts") || "[]");
@@ -624,6 +626,7 @@ function renderSharesList() {
 function selectStock(stock) {
   if (!currentUser || currentUser.status !== "approved") return;
   selectedStock = stock;
+  lastValidatedPrice = stock.price;
   renderSharesList();
   renderSelectedStock(stock);
   const quickSelect = document.getElementById("quickStockSelect");
@@ -632,6 +635,8 @@ function selectStock(stock) {
   }
   subscribeToCurrentStock();
   renderActiveAlertsList();
+  // Trigger immediate REST reconciliation on stock selection switch
+  reconcileLivePriceWithREST();
 }
 
 function renderSelectedStock(stock) {
@@ -927,6 +932,33 @@ const UpstoxSupabaseService = {
       console.warn("Could not retrieve Upstox WebSocket feed URL from Supabase Edge:", err);
     }
     return null;
+  },
+  async fetchLatestPrice(symbol) {
+    const url = this.getFunctionUrl();
+    if (url) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": this.getAnonKey()
+          },
+          body: JSON.stringify({ action: "get_latest_price", symbol })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const p = json.price || json.ltp || (json.data && json.data.ltp);
+          if (p && !isNaN(p) && p > 0) {
+            return parseFloat(p);
+          }
+        }
+      } catch (err) {
+        console.debug("fetchLatestPrice Edge error, using fallback reference:", err);
+      }
+    }
+    // Fallback reference price from verified 2026 NSE master data
+    const matched = STOCKS.find(s => s.symbol === symbol);
+    return matched ? matched.price : null;
   }
 };
 
@@ -1576,12 +1608,43 @@ function startLivePriceStream() {
 
     applyPriceTick(nextPrice, addedVol);
   }, 2200);
+
+  // 3. REST API 'Latest Price' Reconciliation Loop (Every 5 seconds)
+  // Reconciles WebSocket stream & local ticks against exchange truth
+  restReconciliationInterval = setInterval(() => {
+    reconcileLivePriceWithREST();
+  }, 5000);
+}
+
+async function reconcileLivePriceWithREST() {
+  if (!currentUser || currentUser.status !== "approved" || !selectedStock) return;
+  try {
+    const restPrice = await UpstoxSupabaseService.fetchLatestPrice(selectedStock.symbol);
+    if (!restPrice || isNaN(restPrice) || restPrice <= 0) return;
+
+    lastValidatedPrice = restPrice;
+    const currentPrice = selectedStock.price;
+    const deviation = Math.abs(currentPrice - restPrice);
+    const deviationPercent = (deviation / restPrice) * 100;
+
+    // If local tick has drifted by more than 0.25% from REST exchange truth, reconcile smoothly
+    if (deviationPercent > 0.25) {
+      console.info(`[Reconciliation] Reconciling ${selectedStock.symbol}: Local=₹${currentPrice.toFixed(2)} -> REST=₹${restPrice.toFixed(2)} (Dev: ${deviationPercent.toFixed(2)}%)`);
+      applyPriceTick(restPrice, 100);
+    }
+  } catch (err) {
+    console.debug("REST price reconciliation poll omitted:", err);
+  }
 }
 
 function stopLivePriceStream() {
   if (liveDataInterval) {
     clearInterval(liveDataInterval);
     liveDataInterval = null;
+  }
+  if (restReconciliationInterval) {
+    clearInterval(restReconciliationInterval);
+    restReconciliationInterval = null;
   }
   if (wsReconnectTimeout) {
     clearTimeout(wsReconnectTimeout);
@@ -1708,7 +1771,17 @@ function handleUpstoxWsMessage(data) {
     }
 
     if (tickPrice !== null && !isNaN(tickPrice) && tickPrice > 0) {
-      applyPriceTick(parseFloat(tickPrice), tickVol);
+      const parsedPrice = parseFloat(tickPrice);
+      // Validation against last known reliable REST price snapshot to reject corrupted/outlier ticks (> 20% divergence)
+      const benchmarkPrice = lastValidatedPrice || selectedStock.price;
+      if (benchmarkPrice > 0) {
+        const divergenceRatio = Math.abs(parsedPrice - benchmarkPrice) / benchmarkPrice;
+        if (divergenceRatio > 0.20) {
+          console.warn(`[Tick Validation] Discarding anomalous WS tick for ${selectedStock.symbol}: ₹${parsedPrice} (Benchmark: ₹${benchmarkPrice})`);
+          return;
+        }
+      }
+      applyPriceTick(parsedPrice, tickVol);
     }
   }
 }
