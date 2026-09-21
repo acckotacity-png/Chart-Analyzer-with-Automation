@@ -181,10 +181,51 @@
     }
     .stock-row-top { display: flex; justify-content: space-between; align-items: center; }
     .stock-symbol { font-weight: 800; font-size: 15px; color: var(--text); }
-    .stock-price { font-weight: 800; font-size: 15px; color: var(--text); }
+    .stock-price { font-weight: 800; font-size: 15px; color: var(--text); transition: color 0.3s; }
     .stock-row-sub { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-muted); }
     .stock-change.positive { color: var(--green); font-weight: 700; }
     .stock-change.negative { color: var(--red); font-weight: 700; }
+
+    /* Live Pulsing Dot & Flash Animations */
+    .live-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 5px;
+      box-shadow: 0 0 8px var(--green);
+      animation: pulseGreen 1.4s infinite alternate;
+    }
+    @keyframes pulseGreen {
+      0% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1.25); box-shadow: 0 0 12px var(--green); }
+    }
+    .flash-green {
+      animation: flashGreenAnim 0.8s ease-out;
+    }
+    .flash-red {
+      animation: flashRedAnim 0.8s ease-out;
+    }
+    @keyframes flashGreenAnim {
+      0% { color: #fff; text-shadow: 0 0 10px var(--green); }
+      100% { color: var(--green); text-shadow: none; }
+    }
+    @keyframes flashRedAnim {
+      0% { color: #fff; text-shadow: 0 0 10px var(--red); }
+      100% { color: var(--red); text-shadow: none; }
+    }
+    .live-tick-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      background: rgba(0, 230, 118, 0.12);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--green);
+      font-weight: 700;
+    }
 
     /* Chart Area */
     .chart-container {
@@ -345,7 +386,7 @@
         <div class="card" style="padding: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="font-size: 15px; margin-bottom: 0;"><i class="fa-solid fa-list-check"></i> Indian Shares (NSE)</h2>
-            <span style="font-size: 11px; color: var(--green); font-weight: 700;">LIVE</span>
+            <span class="live-tick-badge"><span class="live-dot"></span>LIVE</span>
           </div>
           <p style="font-size: 11px; margin-bottom: 10px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
           
@@ -389,7 +430,10 @@
             </div>
 
             <div style="text-align: right;">
-              <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹2,865.40</div>
+              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;"><span class="live-dot"></span>STREAMING</span>
+                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹2,865.40</div>
+              </div>
               <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+38.20 (+1.35%)</div>
             </div>
           </div>

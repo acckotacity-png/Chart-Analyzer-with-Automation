@@ -153,14 +153,20 @@ let stockChartInstance = null;
 let liveDataInterval = null;
 let currentStockSearchQuery = "";
 
-// Initialize on load
-window.addEventListener("DOMContentLoaded", () => {
+// Initialize on load (handle both interactive/complete and DOMContentLoaded)
+function initApp() {
   if (currentUser) {
     checkActiveStatus();
   } else {
     showView("auth");
   }
-});
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 function toggleAuth(showRegister) {
   document.getElementById("registerForm").classList.toggle("hidden", !showRegister);
@@ -365,16 +371,17 @@ function renderSharesList() {
 
     const div = document.createElement("div");
     div.className = `stock-item ${isSelected ? "active" : ""}`;
+    div.dataset.symbol = stock.symbol;
     div.onclick = () => selectStock(stock);
 
     div.innerHTML = `
       <div class="stock-row-top">
         <span class="stock-symbol">${stock.symbol}</span>
-        <span class="stock-price">₹${stock.price.toFixed(2)}</span>
+        <span class="stock-price" id="listPrice_${stock.symbol}">₹${stock.price.toFixed(2)}</span>
       </div>
       <div class="stock-row-sub">
         <span>${stock.name.substring(0, 22)}</span>
-        <span class="stock-change ${isPositive ? 'positive' : 'negative'}">
+        <span class="stock-change ${isPositive ? 'positive' : 'negative'}" id="listChange_${stock.symbol}">
           ${isPositive ? '+' : ''}${stock.change.toFixed(2)} (${isPositive ? '+' : ''}${stock.changePercent}%)
         </span>
       </div>
@@ -520,34 +527,79 @@ function startLivePriceStream() {
       return;
     }
 
+    if (!selectedStock) return;
+
     // Small realistic market price movement (+/- 0.15%)
-    const delta = (Math.random() - 0.48) * (selectedStock.price * 0.002);
-    selectedStock.price = parseFloat((selectedStock.price + delta).toFixed(2));
+    const isTickPositive = Math.random() > 0.47;
+    const tickMagnitude = (Math.random() * 0.0025 + 0.0005);
+    const delta = (isTickPositive ? 1 : -1) * (selectedStock.price * tickMagnitude);
+
+    const oldPrice = selectedStock.price;
+    selectedStock.price = parseFloat(Math.max(1, selectedStock.price + delta).toFixed(2));
     selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
-    selectedStock.changePercent = parseFloat(((selectedStock.change / (selectedStock.price - selectedStock.change)) * 100).toFixed(2));
+    const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
+    selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
 
     // Update last chart candle point
     if (selectedStock.chartData && selectedStock.chartData.length > 0) {
       selectedStock.chartData[selectedStock.chartData.length - 1] = selectedStock.price;
     }
 
-    // Refresh UI elements
+    // Refresh chart main header UI elements
     const priceElem = document.getElementById("selectedStockPrice");
     const changeElem = document.getElementById("selectedStockChange");
     if (priceElem && changeElem) {
       const isPos = selectedStock.change >= 0;
       priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
       priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
+      
+      // Trigger subtle pulse animation on price change
+      priceElem.classList.remove("flash-green", "flash-red");
+      void priceElem.offsetWidth; // Trigger reflow
+      priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
+
       changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
       changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
     }
 
+    // Also update the stock card in the Indian Shares list if visible
+    const listPriceElem = document.getElementById(`listPrice_${selectedStock.symbol}`);
+    const listChangeElem = document.getElementById(`listChange_${selectedStock.symbol}`);
+    if (listPriceElem) {
+      listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+    }
+    if (listChangeElem) {
+      const isPos = selectedStock.change >= 0;
+      listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
+      listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+    }
+
+    // Periodically update one random background stock in the list to make the whole market feel alive
+    const otherStocks = STOCKS.filter(s => s.symbol !== selectedStock.symbol);
+    if (otherStocks.length > 0 && Math.random() > 0.4) {
+      const bgStock = otherStocks[Math.floor(Math.random() * otherStocks.length)];
+      const bgDelta = (Math.random() > 0.5 ? 1 : -1) * (bgStock.price * 0.0015);
+      bgStock.price = parseFloat(Math.max(1, bgStock.price + bgDelta).toFixed(2));
+      bgStock.change = parseFloat((bgStock.change + bgDelta).toFixed(2));
+      const bgBase = Math.max(1, bgStock.price - bgStock.change);
+      bgStock.changePercent = parseFloat(((bgStock.change / bgBase) * 100).toFixed(2));
+
+      const bgListPrice = document.getElementById(`listPrice_${bgStock.symbol}`);
+      const bgListChange = document.getElementById(`listChange_${bgStock.symbol}`);
+      if (bgListPrice) bgListPrice.innerText = `₹${bgStock.price.toFixed(2)}`;
+      if (bgListChange) {
+        const bgPos = bgStock.change >= 0;
+        bgListChange.className = `stock-change ${bgPos ? 'positive' : 'negative'}`;
+        bgListChange.innerText = `${bgPos ? '+' : ''}${bgStock.change.toFixed(2)} (${bgPos ? '+' : ''}${bgStock.changePercent}%)`;
+      }
+    }
+
     // Update Chart without full recreation
     if (stockChartInstance && stockChartInstance.data && stockChartInstance.data.datasets.length > 0) {
-      stockChartInstance.data.datasets[0].data = selectedStock.chartData;
+      stockChartInstance.data.datasets[0].data = [...selectedStock.chartData];
       stockChartInstance.update('none');
     }
-  }, 3500);
+  }, 2500);
 }
 
 function switchTimeframe(tf) {
