@@ -635,8 +635,8 @@ function selectStock(stock) {
   }
   subscribeToCurrentStock();
   renderActiveAlertsList();
-  // Trigger immediate REST reconciliation on stock selection switch
-  reconcileLivePriceWithREST();
+  // Trigger immediate REST market price reconciliation on stock selection switch
+  reconcileMarketPrice();
 }
 
 function renderSelectedStock(stock) {
@@ -1609,31 +1609,111 @@ function startLivePriceStream() {
     applyPriceTick(nextPrice, addedVol);
   }, 2200);
 
-  // 3. REST API 'Latest Price' Reconciliation Loop (Every 5 seconds)
-  // Reconciles WebSocket stream & local ticks against exchange truth
+  // 3. Market Price Reconciliation Loop: Fetches official Upstox REST API price exactly every 5 seconds,
+  // overriding any lagged or drifting WebSocket ticks to keep UI 100% true to the exchange
   restReconciliationInterval = setInterval(() => {
-    reconcileLivePriceWithREST();
+    reconcileMarketPrice();
   }, 5000);
 }
 
-async function reconcileLivePriceWithREST() {
+/**
+ * Market Price Reconciliation Function
+ * Fetches the latest price from Upstox REST API exactly every 5 seconds,
+ * ignoring the potentially lagged WebSocket feed, and updates the UI
+ * to match the official exchange price perfectly.
+ */
+async function reconcileMarketPrice() {
   if (!currentUser || currentUser.status !== "approved" || !selectedStock) return;
+
+  const targetSymbol = selectedStock.symbol;
   try {
-    const restPrice = await UpstoxSupabaseService.fetchLatestPrice(selectedStock.symbol);
-    if (!restPrice || isNaN(restPrice) || restPrice <= 0) return;
+    const officialPrice = await UpstoxSupabaseService.fetchLatestPrice(targetSymbol);
+    if (!officialPrice || isNaN(officialPrice) || officialPrice <= 0) return;
 
-    lastValidatedPrice = restPrice;
+    // Verify user hasn't switched to another stock during network latency
+    if (!selectedStock || selectedStock.symbol !== targetSymbol) return;
+
+    lastValidatedPrice = officialPrice;
     const currentPrice = selectedStock.price;
-    const deviation = Math.abs(currentPrice - restPrice);
-    const deviationPercent = (deviation / restPrice) * 100;
+    const delta = +(officialPrice - currentPrice).toFixed(2);
 
-    // If local tick has drifted by more than 0.25% from REST exchange truth, reconcile smoothly
-    if (deviationPercent > 0.25) {
-      console.info(`[Reconciliation] Reconciling ${selectedStock.symbol}: Local=₹${currentPrice.toFixed(2)} -> REST=₹${restPrice.toFixed(2)} (Dev: ${deviationPercent.toFixed(2)}%)`);
-      applyPriceTick(restPrice, 100);
+    // Update selected stock master price to match official exchange price perfectly
+    selectedStock.price = parseFloat(officialPrice.toFixed(2));
+    if (selectedStock.basePrice) {
+      selectedStock.change = parseFloat((selectedStock.price - selectedStock.basePrice).toFixed(2));
+      selectedStock.changePercent = parseFloat(((selectedStock.change / selectedStock.basePrice) * 100).toFixed(2));
+    } else {
+      selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
+      const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
+      selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
+    }
+
+    // 1. Update Header UI Elements (Price, Change, and Animation)
+    const priceElem = document.getElementById("selectedStockPrice");
+    const changeElem = document.getElementById("selectedStockChange");
+    if (priceElem && changeElem) {
+      const isPos = selectedStock.change >= 0;
+      priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+      priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
+
+      if (Math.abs(delta) > 0.05) {
+        priceElem.classList.remove("flash-green", "flash-red");
+        void priceElem.offsetWidth; // Trigger CSS reflow
+        priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
+      }
+
+      changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+      changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
+    }
+
+    // 2. Update Live Candlestick & Legend in TradingView Lightweight Chart
+    if (currentCandles && currentCandles.length > 0) {
+      const lastCandle = currentCandles[currentCandles.length - 1];
+      lastCandle.close = selectedStock.price;
+      lastCandle.high = Math.max(lastCandle.high, selectedStock.price);
+      lastCandle.low = Math.min(lastCandle.low, selectedStock.price);
+
+      if (candleSeries) {
+        candleSeries.update({
+          time: lastCandle.time,
+          open: lastCandle.open,
+          high: lastCandle.high,
+          low: lastCandle.low,
+          close: lastCandle.close
+        });
+      }
+
+      const legend = document.getElementById("legendOhlc");
+      if (legend) {
+        legend.innerText = `O: ${lastCandle.open.toFixed(2)}  H: ${lastCandle.high.toFixed(2)}  L: ${lastCandle.low.toFixed(2)}  C: ${lastCandle.close.toFixed(2)}`;
+      }
+    }
+
+    // 3. Update Shares List Sidebar Item
+    const listPriceElem = document.getElementById(`listPrice_${targetSymbol}`);
+    const listChangeElem = document.getElementById(`listChange_${targetSymbol}`);
+    if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+    if (listChangeElem) {
+      const isPos = selectedStock.change >= 0;
+      listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
+      listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+    }
+
+    // 4. Check user-defined price alerts
+    checkPriceAlerts(targetSymbol, selectedStock.price, currentPrice);
+
+    // 5. Update visual sync badge indicator
+    const syncBadge = document.getElementById("reconcileStatusBadge");
+    if (syncBadge) {
+      syncBadge.innerHTML = `<i class="fa-solid fa-check" style="font-size: 9px; color: var(--green);"></i> REST SYNCED ₹${officialPrice.toFixed(2)}`;
+      setTimeout(() => {
+        if (syncBadge) {
+          syncBadge.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin" style="font-size: 9px; animation-duration: 5s;"></i> REST 5s SYNC`;
+        }
+      }, 2000);
     }
   } catch (err) {
-    console.debug("REST price reconciliation poll omitted:", err);
+    console.debug("Market Price Reconciliation poll omitted:", err);
   }
 }
 
