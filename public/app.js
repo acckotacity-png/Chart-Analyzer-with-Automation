@@ -52,6 +52,21 @@ const STOCKS = [
     chartData: [920, 935, 942, 955, 960, 968, 978.60]
   },
   {
+    symbol: "TATASTEEL",
+    tvSymbol: "NSE:TATASTEEL",
+    name: "Tata Steel Ltd",
+    price: 154.20,
+    change: 2.35,
+    changePercent: 1.55,
+    rsi: 59.2,
+    ema20: 151.80,
+    sma50: 148.50,
+    macd: "Bullish +1.4",
+    signal: "BUY",
+    aiText: "मेटल सेक्टर में उछाल से Tata Steel अपने प्रमुख सपोर्ट स्तरों से ऊपर मजबूत स्थिति में है।",
+    chartData: [148, 150, 149, 152, 153, 154.20]
+  },
+  {
     symbol: "INFY",
     tvSymbol: "NSE:INFY",
     name: "Infosys Ltd",
@@ -155,6 +170,81 @@ const STOCKS = [
     signal: "STRONG BUY",
     aiText: "टेलीकॉम एआरपीयू बढ़ने की उम्मीद से भारती एयरटेल मजबूत अपट्रेंड में ट्रेड कर रहा है।",
     chartData: [1420, 1435, 1448, 1460, 1472, 1475, 1485.60]
+  },
+  {
+    symbol: "ADANIENT",
+    tvSymbol: "NSE:ADANIENT",
+    name: "Adani Enterprises Ltd",
+    price: 2940.00,
+    change: 42.00,
+    changePercent: 1.45,
+    rsi: 61.2,
+    ema20: 2890.00,
+    sma50: 2820.00,
+    macd: "Bullish +11.2",
+    signal: "BUY",
+    aiText: "अडानी एंटरप्राइजेज में उच्च वॉल्यूम के साथ ब्रेकआउट देखा जा रहा है। 20 EMA पर सपोर्ट है।",
+    chartData: [2810, 2840, 2870, 2890, 2915, 2940.00]
+  },
+  {
+    symbol: "BAJFINANCE",
+    tvSymbol: "NSE:BAJFINANCE",
+    name: "Bajaj Finance Ltd",
+    price: 7180.00,
+    change: 85.00,
+    changePercent: 1.20,
+    rsi: 57.8,
+    ema20: 7110.00,
+    sma50: 7020.00,
+    macd: "Bullish +15.6",
+    signal: "BUY",
+    aiText: "बजाज फाइनेंस ₹7,100 स्तरों के ऊपर कंसोलिडेट कर रहा है। मोमेंटम इंडिकेटर्स पॉजिटिव हैं।",
+    chartData: [7010, 7050, 7090, 7120, 7150, 7180.00]
+  },
+  {
+    symbol: "WIPRO",
+    tvSymbol: "NSE:WIPRO",
+    name: "Wipro Ltd",
+    price: 520.40,
+    change: 6.20,
+    changePercent: 1.21,
+    rsi: 55.4,
+    ema20: 512.00,
+    sma50: 504.00,
+    macd: "Bullish +2.8",
+    signal: "BUY",
+    aiText: "विप्रो में निचले स्तरों से अच्छी रिकवरी देखी जा रही है। स्टॉपलॉस ₹508 रखें।",
+    chartData: [502, 506, 510, 514, 518, 520.40]
+  },
+  {
+    symbol: "ZOMATO",
+    tvSymbol: "NSE:ZOMATO",
+    name: "Zomato Ltd",
+    price: 265.80,
+    change: 5.40,
+    changePercent: 2.07,
+    rsi: 69.5,
+    ema20: 255.00,
+    sma50: 242.00,
+    macd: "Strong Bullish +6.1",
+    signal: "STRONG BUY",
+    aiText: "जोमैटो मजबूत तिमाही नतीजों के बाद अपने 52-वीक हाई के नजदीक ट्रेड कर रहा है।",
+    chartData: [240, 245, 252, 258, 262, 265.80]
+  },
+  {
+    symbol: "MARUTI",
+    tvSymbol: "NSE:MARUTI",
+    name: "Maruti Suzuki India Ltd",
+    price: 12350.00,
+    change: 120.00,
+    changePercent: 0.98,
+    rsi: 60.1,
+    ema20: 12180.00,
+    sma50: 12050.00,
+    macd: "Bullish +32.0",
+    signal: "BUY",
+    aiText: "मारुति सुजुकी ऑटो इंडेक्स में लीडरशिप बनाए हुए है। सपोर्ट ₹12,150 पर बना हुआ है।",
+    chartData: [12010, 12090, 12150, 12220, 12280, 12350.00]
   }
 ];
 
@@ -330,9 +420,32 @@ function initDashboardShares() {
     return;
   }
 
+  populateQuickStockDropdown();
   renderSharesList();
   renderSelectedStock(selectedStock);
   startLivePriceStream();
+}
+
+function populateQuickStockDropdown() {
+  const select = document.getElementById("quickStockSelect");
+  if (!select) return;
+  select.innerHTML = "";
+  STOCKS.forEach(stock => {
+    const opt = document.createElement("option");
+    opt.value = stock.symbol;
+    opt.innerText = `${stock.symbol} (₹${stock.price.toFixed(0)})`;
+    if (selectedStock && stock.symbol === selectedStock.symbol) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
+}
+
+function onQuickStockSelect(sym) {
+  const found = STOCKS.find(s => s.symbol === sym);
+  if (found) {
+    selectStock(found);
+  }
 }
 
 function handleStockSearch(query) {
@@ -344,13 +457,69 @@ function handleStockSearch(query) {
   renderSharesList();
 }
 
+function handleStockSearchEnter() {
+  const input = document.getElementById("stockSearchInput");
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) return;
+
+  // Exact or partial match in existing STOCKS
+  const exactMatch = STOCKS.find(s => s.symbol.toLowerCase() === q.toLowerCase());
+  if (exactMatch) {
+    selectStock(exactMatch);
+    return;
+  }
+  const partialMatch = STOCKS.find(s => s.symbol.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase()));
+  if (partialMatch) {
+    selectStock(partialMatch);
+    return;
+  }
+
+  // Dynamic Indian Stock Search directly to live NSE
+  addAndSelectCustomStock(q);
+}
+
+function addAndSelectCustomStock(symbolInput) {
+  const sym = symbolInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!sym) return;
+
+  let existing = STOCKS.find(s => s.symbol === sym || s.tvSymbol === `NSE:${sym}`);
+  if (existing) {
+    selectStock(existing);
+    clearStockSearch();
+    return;
+  }
+
+  const newStock = {
+    symbol: sym,
+    tvSymbol: `NSE:${sym}`,
+    name: `${sym} (NSE Live)`,
+    price: 1000.00,
+    change: 12.50,
+    changePercent: 1.25,
+    rsi: 58.0,
+    ema20: 985.00,
+    sma50: 970.00,
+    macd: "Bullish +2.5",
+    signal: "BUY",
+    aiText: `${sym} का लाइव NSE चार्ट लोड हो गया है। ट्रेडिंगव्यू रियल-टाइम कैंडल्स और मार्केट वॉल्यूम सीधे NSE सर्वर से आ रहे हैं।`,
+    chartData: [960, 970, 985, 990, 995, 1000]
+  };
+  STOCKS.unshift(newStock);
+  populateQuickStockDropdown();
+  clearStockSearch();
+  selectStock(newStock);
+}
+
 function clearStockSearch() {
   const input = document.getElementById("stockSearchInput");
   if (input) {
     input.value = "";
-    input.focus();
   }
-  handleStockSearch("");
+  currentStockSearchQuery = "";
+  const clearBtn = document.getElementById("clearStockSearchBtn");
+  if (clearBtn) clearBtn.classList.add("hidden");
+  renderSharesList();
 }
 
 function renderSharesList() {
@@ -367,11 +536,21 @@ function renderSharesList() {
   });
 
   if (filteredStocks.length === 0) {
+    const cleanQ = currentStockSearchQuery.toUpperCase().replace(/[^A-Z0-9]/g, "");
     container.innerHTML = `
-      <div style="text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 13px;">
-        <i class="fa-solid fa-circle-exclamation" style="font-size: 24px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
-        <span>No stocks found matching "<b>${currentStockSearchQuery}</b>"</span>
+      <div style="text-align: center; padding: 18px 10px; color: var(--text-muted); font-size: 13px;">
+        <i class="fa-solid fa-circle-exclamation" style="font-size: 22px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
+        <span>"${currentStockSearchQuery}" प्रीसेट लिस्ट में नहीं है</span>
       </div>
+      ${cleanQ ? `
+        <div class="direct-search-banner" onclick="addAndSelectCustomStock('${cleanQ}')">
+          <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fa-solid fa-bolt" style="color:var(--cyan); font-size:14px;"></i>
+            <span style="font-weight:700; color:var(--cyan);">NSE:${cleanQ} का असली चार्ट खोलें</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">क्लिक करें - सीधा लाइव मार्केट से लिंक होगा</div>
+        </div>
+      ` : ''}
     `;
     return;
   }
@@ -399,6 +578,24 @@ function renderSharesList() {
     `;
     container.appendChild(div);
   });
+
+  // If user searched for custom Indian ticker, offer direct NSE open at the bottom too
+  if (currentStockSearchQuery && currentStockSearchQuery.length >= 2) {
+    const cleanQ = currentStockSearchQuery.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const alreadyExact = filteredStocks.some(s => s.symbol === cleanQ);
+    if (!alreadyExact && cleanQ) {
+      const banner = document.createElement("div");
+      banner.className = "direct-search-banner";
+      banner.onclick = () => addAndSelectCustomStock(cleanQ);
+      banner.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <i class="fa-solid fa-magnifying-glass-chart" style="color:var(--cyan);"></i>
+          <span style="font-weight:700; color:var(--cyan); font-size:12px;">NSE:${cleanQ} का लाइव चार्ट लोड करें</span>
+        </div>
+      `;
+      container.appendChild(banner);
+    }
+  }
 }
 
 function selectStock(stock) {
@@ -406,6 +603,10 @@ function selectStock(stock) {
   selectedStock = stock;
   renderSharesList();
   renderSelectedStock(stock);
+  const quickSelect = document.getElementById("quickStockSelect");
+  if (quickSelect) {
+    quickSelect.value = stock.symbol;
+  }
 }
 
 function renderSelectedStock(stock) {
@@ -435,6 +636,12 @@ function renderSelectedStock(stock) {
 
   // AI Insight Text
   document.getElementById("aiInsightText").innerText = stock.aiText;
+
+  // Update quick stock select dropdown if present
+  const quickSelect = document.getElementById("quickStockSelect");
+  if (quickSelect && quickSelect.value !== stock.symbol) {
+    quickSelect.value = stock.symbol;
+  }
 
   // Render Chart
   if (currentChartMode === "tradingview") {
@@ -498,10 +705,22 @@ function renderTradingViewChart(symbol) {
         "locale": "in",
         "toolbar_bg": "#111827",
         "enable_publishing": false,
-        "allow_symbol_change": true,
+        "allow_symbol_change": false,
         "hide_side_toolbar": false,
         "withdateranges": true,
         "save_image": false,
+        "show_popup_button": false,
+        "hide_volume": false,
+        "disabled_features": [
+          "header_symbol_search",
+          "header_compare",
+          "symbol_search_hot_key",
+          "display_market_status",
+          "go_to_date"
+        ],
+        "enabled_features": [
+          "use_localstorage_for_settings"
+        ],
         "container_id": "tradingview_chart_container"
       });
       return;
@@ -510,9 +729,9 @@ function renderTradingViewChart(symbol) {
     }
   }
 
-  // Reliable iframe fallback
+  // Reliable iframe fallback without restricted symbol search or popups
   const iframe = document.createElement("iframe");
-  iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(cleanSymbol)}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=111827&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in&utm_source=&utm_medium=widget&utm_campaign=chart&utm_term=${encodeURIComponent(cleanSymbol)}`;
+  iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(cleanSymbol)}&interval=D&hidesidetoolbar=0&symboledit=0&saveimage=0&toolbarbg=111827&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in&utm_source=&utm_medium=widget&utm_campaign=chart&utm_term=${encodeURIComponent(cleanSymbol)}`;
   iframe.style.width = "100%";
   iframe.style.height = "100%";
   iframe.style.border = "none";

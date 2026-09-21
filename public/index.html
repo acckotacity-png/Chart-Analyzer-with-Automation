@@ -161,6 +161,37 @@
       color: var(--text);
     }
 
+    .direct-search-banner {
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px dashed var(--cyan);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.2s;
+    }
+    .direct-search-banner:hover {
+      background: rgba(0, 229, 255, 0.16);
+      transform: translateY(-1px);
+    }
+
+    .quick-stock-select {
+      background: var(--card-elevated);
+      color: var(--cyan);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      outline: none;
+      cursor: pointer;
+      max-width: 220px;
+    }
+    .quick-stock-select:focus {
+      border-color: var(--cyan);
+    }
+
     /* Shares Stock List & Interactive Chart */
     .dashboard-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
     @media (max-width: 850px) {
@@ -398,9 +429,10 @@
               type="text" 
               id="stockSearchInput" 
               class="stock-search-input" 
-              placeholder="Search symbol or company (e.g. RELIANCE, TCS)..." 
+              placeholder="Search Indian stocks (e.g. RELIANCE, TCS, ADANI)..." 
               autocomplete="off"
               oninput="handleStockSearch(this.value)"
+              onkeydown="if(event.key==='Enter') handleStockSearchEnter()"
             >
             <button 
               type="button" 
@@ -422,12 +454,15 @@
         <div class="chart-container">
           <div class="chart-header">
             <div>
-              <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <h1 id="selectedStockSymbol" style="font-size: 24px; font-weight: 800; color: var(--text);">RELIANCE</h1>
                 <span id="selectedStockExchange" style="background: var(--card-elevated); padding: 3px 8px; border-radius: 4px; font-size: 11px; color: var(--cyan); font-weight: 700;">NSE</span>
                 <span id="signalBadge" class="badge approved">BUY SIGNAL</span>
+                <select id="quickStockSelect" class="quick-stock-select" onchange="onQuickStockSelect(this.value)" title="Quick Switch Indian Stock">
+                  <!-- Populated via JavaScript -->
+                </select>
               </div>
-              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="selectedStockName">Reliance Industries Ltd</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="selectedStockName">Reliance Industries Ltd</div>
             </div>
 
             <div style="text-align: right;">
