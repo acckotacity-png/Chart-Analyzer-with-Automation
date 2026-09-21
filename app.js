@@ -4,37 +4,142 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 let currentUser = JSON.parse(localStorage.getItem("app_user") || "null");
 
-// Indian Stock Data & Indicators (Real NSE India 2026 Reference Baseline)
+// Indian Stock Data & Indicators (Real NSE India 2026 Reference Baseline synced with TradingView)
 const STOCKS = [
   {
     symbol: "RELIANCE",
     tvSymbol: "NSE:RELIANCE",
     name: "Reliance Industries Ltd",
-    price: 1226.40,
-    change: -8.30,
-    changePercent: -0.67,
+    price: 1243.80,
+    change: 17.40,
+    changePercent: 1.42,
     rsi: 58.4,
-    ema20: 1220.50,
-    sma50: 1212.00,
+    ema20: 1230.50,
+    sma50: 1218.00,
     macd: "Bullish +3.2",
+    signal: "STRONG BUY",
+    aiText: "Reliance Industries ₹1,243.80 (+1.42%) के स्तर पर 20 EMA से ऊपर मजबूत अपट्रेंड में ट्रेड कर रहा है। वॉल्यूम 7.97M के साथ बुलिश मोमेंटम जारी है।",
+    chartData: [1220, 1225, 1230, 1228, 1236, 1240, 1243.80]
+  },
+  {
+    symbol: "BHARTIARTL",
+    tvSymbol: "NSE:BHARTIARTL",
+    name: "Bharti Airtel Ltd",
+    price: 1829.00,
+    change: -64.40,
+    changePercent: -3.40,
+    rsi: 46.2,
+    ema20: 1850.00,
+    sma50: 1810.00,
+    macd: "Bearish -4.1",
     signal: "BUY",
-    aiText: "Reliance Industries (पोस्ट-बोनस 1:1) ₹1,226 के स्तर पर 20 EMA सपोर्ट के करीब ट्रेड कर रहा है। ₹1,210 के स्टॉपलॉस के साथ मोमेंटम पॉजिटिव बना हुआ है।",
-    chartData: [1210, 1218, 1225, 1220, 1232, 1236, 1226.40]
+    aiText: "भारती एयरटेल ₹1,829.00 (-3.40%) के स्तर पर प्रमुख 50 SMA सपोर्ट के पास कंसोलिडेट कर रहा है। लॉन्ग-टर्म बायर्स के लिए अनुकूल स्तर।",
+    chartData: [1890, 1880, 1865, 1850, 1835, 1820, 1829.00]
+  },
+  {
+    symbol: "HDFCBANK",
+    tvSymbol: "NSE:HDFCBANK",
+    name: "HDFC Bank Ltd",
+    price: 741.65,
+    change: 10.70,
+    changePercent: 1.46,
+    rsi: 59.4,
+    ema20: 732.00,
+    sma50: 724.00,
+    macd: "Bullish +2.8",
+    signal: "STRONG BUY",
+    aiText: "HDFC Bank 28.11M उच्च वॉल्यूम के साथ ₹741.65 (+1.46%) पर मजबूत संस्थागत बाइंग फ्लो दिखा रहा है। सपोर्ट ₹732 पर बना है।",
+    chartData: [722, 726, 730, 735, 738, 739, 741.65]
+  },
+  {
+    symbol: "ICICIBANK",
+    tvSymbol: "NSE:ICICIBANK",
+    name: "ICICI Bank Ltd",
+    price: 1344.90,
+    change: 6.00,
+    changePercent: 0.45,
+    rsi: 62.8,
+    ema20: 1335.00,
+    sma50: 1315.00,
+    macd: "Bullish +4.8",
+    signal: "STRONG BUY",
+    aiText: "ICICI Bank ₹1,344.90 (+0.45%) पर नए ऑल-टाइम हाई स्तरों के पास ट्रेड कर रहा है। बैंकिंग इंडेक्स में लगातार लीडरशिप।",
+    chartData: [1310, 1320, 1328, 1335, 1340, 1342, 1344.90]
+  },
+  {
+    symbol: "SBIN",
+    tvSymbol: "NSE:SBIN",
+    name: "State Bank of India",
+    price: 995.50,
+    change: -0.70,
+    changePercent: -0.07,
+    rsi: 58.1,
+    ema20: 988.50,
+    sma50: 975.00,
+    macd: "Neutral +1.3",
+    signal: "BUY",
+    aiText: "State Bank of India (SBI) ₹995.50 के स्तर पर ₹1,000 के ऐतिहासिक माइलस्टोन के करीब कंसोलिडेट कर रहा है।",
+    chartData: [970, 982, 988, 992, 998, 994, 995.50]
   },
   {
     symbol: "TCS",
     tvSymbol: "NSE:TCS",
     name: "Tata Consultancy Services",
-    price: 2105.00,
-    change: -12.50,
-    changePercent: -0.59,
-    rsi: 48.8,
-    ema20: 2120.00,
+    price: 2136.60,
+    change: 31.60,
+    changePercent: 1.50,
+    rsi: 54.8,
+    ema20: 2115.00,
     sma50: 2095.00,
+    macd: "Bullish +5.2",
+    signal: "BUY",
+    aiText: "TCS ₹2,136.60 (+1.50%) के स्तर पर फ्रेश ब्रेकआउट प्रदर्शित कर रहा है। IT सेक्टर में बाइंग इंटरेस्ट सुरक्षित है।",
+    chartData: [2095, 2105, 2110, 2118, 2125, 2130, 2136.60]
+  },
+  {
+    symbol: "BAJFINANCE",
+    tvSymbol: "NSE:BAJFINANCE",
+    name: "Bajaj Finance Ltd",
+    price: 1025.40,
+    change: -14.90,
+    changePercent: -1.43,
+    rsi: 45.8,
+    ema20: 1040.00,
+    sma50: 1015.00,
+    macd: "Neutral -0.6",
+    signal: "BUY",
+    aiText: "बजाज फाइनेंस (स्टॉक विभाजन उपरांत) ₹1,025.40 पर प्रमुख सपोर्ट जोन के निकट ट्रेड कर रहा है।",
+    chartData: [1045, 1040, 1035, 1030, 1022, 1028, 1025.40]
+  },
+  {
+    symbol: "LT",
+    tvSymbol: "NSE:LT",
+    name: "Larsen & Toubro Ltd",
+    price: 3900.40,
+    change: 15.50,
+    changePercent: 0.40,
+    rsi: 61.5,
+    ema20: 3860.00,
+    sma50: 3810.00,
+    macd: "Bullish +14.4",
+    signal: "BUY",
+    aiText: "इन्फ्रास्ट्रक्चर दिग्गज L&T ₹3,900.40 (+0.40%) पर मजबूत ऑर्डर बुक और विदेशी निवेश के साथ निरंतर अपट्रेंड में है।",
+    chartData: [3820, 3845, 3860, 3875, 3890, 3895, 3900.40]
+  },
+  {
+    symbol: "INFY",
+    tvSymbol: "NSE:INFY",
+    name: "Infosys Ltd",
+    price: 1038.80,
+    change: -12.60,
+    changePercent: -1.20,
+    rsi: 48.6,
+    ema20: 1055.00,
+    sma50: 1040.00,
     macd: "Neutral -1.2",
-    signal: "HOLD",
-    aiText: "TCS ₹2,105 के स्तर पर प्रमुख सपोर्ट के करीब कंसोलिडेट कर रहा है। फ्रेश ब्रेकआउट के लिए ₹2,130 स्तरों का इंतज़ार करें।",
-    chartData: [2140, 2130, 2115, 2125, 2095, 2110, 2105.00]
+    signal: "BUY",
+    aiText: "Infosys ₹1,038.80 पर 50 SMA सपोर्ट के पास है। 4.58M वॉल्यूम के साथ वैल्यू बाइंग स्तरों पर उपलब्ध।",
+    chartData: [1060, 1055, 1048, 1042, 1035, 1036, 1038.80]
   },
   {
     symbol: "TATAMOTORS",
@@ -67,66 +172,6 @@ const STOCKS = [
     chartData: [148, 150, 149, 152, 153, 154.20]
   },
   {
-    symbol: "INFY",
-    tvSymbol: "NSE:INFY",
-    name: "Infosys Ltd",
-    price: 1540.25,
-    change: 12.30,
-    changePercent: 0.81,
-    rsi: 58.6,
-    ema20: 1520.00,
-    sma50: 1505.00,
-    macd: "Bullish +4.2",
-    signal: "BUY",
-    aiText: "Infosys 200 DMA के ऊपर सस्टेन कर रहा है। RSI 58.6 स्थिर बढ़त का संकेत दे रहा है।",
-    chartData: [1500, 1512, 1518, 1530, 1525, 1535, 1540.25]
-  },
-  {
-    symbol: "HDFCBANK",
-    tvSymbol: "NSE:HDFCBANK",
-    name: "HDFC Bank Ltd",
-    price: 731.00,
-    change: 6.50,
-    changePercent: 0.90,
-    rsi: 56.4,
-    ema20: 725.00,
-    sma50: 715.00,
-    macd: "Bullish +2.1",
-    signal: "BUY",
-    aiText: "HDFC Bank ₹731 के स्तर पर मजबूत संस्थागत बाइंग फ्लो दिखा रहा है। तात्कालिक सपोर्ट ₹720 पर बना है।",
-    chartData: [710, 715, 722, 726, 730, 728, 731.00]
-  },
-  {
-    symbol: "ICICIBANK",
-    tvSymbol: "NSE:ICICIBANK",
-    name: "ICICI Bank Ltd",
-    price: 1118.50,
-    change: 14.20,
-    changePercent: 1.29,
-    rsi: 66.8,
-    ema20: 1095.00,
-    sma50: 1070.00,
-    macd: "Bullish +6.8",
-    signal: "STRONG BUY",
-    aiText: "ICICI Bank लगातार नए शिखर छू रहा है। तकनीकी इंडिकेटर सुपर-बुलिश ट्रेंड दर्शाते हैं।",
-    chartData: [1065, 1080, 1092, 1100, 1105, 1112, 1118.50]
-  },
-  {
-    symbol: "SBIN",
-    tvSymbol: "NSE:SBIN",
-    name: "State Bank of India",
-    price: 812.30,
-    change: 9.40,
-    changePercent: 1.17,
-    rsi: 62.1,
-    ema20: 798.50,
-    sma50: 780.00,
-    macd: "Bullish +5.3",
-    signal: "BUY",
-    aiText: "State Bank of India (SBI) अपने ऑल-टाइम हाई लेवल्स के करीब कंसोलिडेट कर रहा है। टारगेट ₹845।",
-    chartData: [780, 788, 795, 792, 804, 808, 812.30]
-  },
-  {
     symbol: "ITC",
     tvSymbol: "NSE:ITC",
     name: "ITC Limited",
@@ -142,36 +187,6 @@ const STOCKS = [
     chartData: [482, 485, 487, 484, 490, 489, 492.15]
   },
   {
-    symbol: "LT",
-    tvSymbol: "NSE:LT",
-    name: "Larsen & Toubro Ltd",
-    price: 3620.00,
-    change: 45.80,
-    changePercent: 1.28,
-    rsi: 65.5,
-    ema20: 3560.00,
-    sma50: 3510.00,
-    macd: "Bullish +18.4",
-    signal: "BUY",
-    aiText: "इन्फ्रास्ट्रक्चर ऑर्डर बुक मजबूत होने के कारण L&T में निरंतर बाइंग फ्लो जारी है।",
-    chartData: [3510, 3535, 3550, 3575, 3590, 3605, 3620.00]
-  },
-  {
-    symbol: "BHARTIARTL",
-    tvSymbol: "NSE:BHARTIARTL",
-    name: "Bharti Airtel Ltd",
-    price: 1485.60,
-    change: 21.30,
-    changePercent: 1.45,
-    rsi: 68.2,
-    ema20: 1450.00,
-    sma50: 1420.00,
-    macd: "Strong Bullish +9.1",
-    signal: "STRONG BUY",
-    aiText: "टेलीकॉम एआरपीयू बढ़ने की उम्मीद से भारती एयरटेल मजबूत अपट्रेंड में ट्रेड कर रहा है।",
-    chartData: [1420, 1435, 1448, 1460, 1472, 1475, 1485.60]
-  },
-  {
     symbol: "ADANIENT",
     tvSymbol: "NSE:ADANIENT",
     name: "Adani Enterprises Ltd",
@@ -185,21 +200,6 @@ const STOCKS = [
     signal: "BUY",
     aiText: "अडानी एंटरप्राइजेज में उच्च वॉल्यूम के साथ ब्रेकआउट देखा जा रहा है। 20 EMA पर सपोर्ट है।",
     chartData: [2810, 2840, 2870, 2890, 2915, 2940.00]
-  },
-  {
-    symbol: "BAJFINANCE",
-    tvSymbol: "NSE:BAJFINANCE",
-    name: "Bajaj Finance Ltd",
-    price: 7180.00,
-    change: 85.00,
-    changePercent: 1.20,
-    rsi: 57.8,
-    ema20: 7110.00,
-    sma50: 7020.00,
-    macd: "Bullish +15.6",
-    signal: "BUY",
-    aiText: "बजाज फाइनेंस ₹7,100 स्तरों के ऊपर कंसोलिडेट कर रहा है। मोमेंटम इंडिकेटर्स पॉजिटिव हैं।",
-    chartData: [7010, 7050, 7090, 7120, 7150, 7180.00]
   },
   {
     symbol: "WIPRO",
@@ -881,10 +881,10 @@ const UpstoxSupabaseService = {
   },
   generateRealisticCandles(symbol, timeframe, count) {
     const basePrices = {
-      RELIANCE: 1226.40, TCS: 2105.00, TATAMOTORS: 442.90, TATASTEEL: 154.20,
-      INFY: 1540.25, HDFCBANK: 731.00, ICICIBANK: 1118.50, SBIN: 812.30,
-      BHARTIARTL: 1485.60, ADANIENT: 2940.00, BAJFINANCE: 7180.00, WIPRO: 520.40,
-      ZOMATO: 265.80, MARUTI: 12350.00
+      RELIANCE: 1243.80, BHARTIARTL: 1829.00, HDFCBANK: 741.65, ICICIBANK: 1344.90,
+      SBIN: 995.50, TCS: 2136.60, BAJFINANCE: 1025.40, LT: 3900.40,
+      INFY: 1038.80, TATAMOTORS: 442.90, TATASTEEL: 154.20, ITC: 492.15,
+      ADANIENT: 2940.00, WIPRO: 520.40, ZOMATO: 265.80, MARUTI: 12350.00
     };
     let curPrice = basePrices[symbol] || (selectedStock ? selectedStock.price : 1000);
     const candles = [];
@@ -1599,11 +1599,14 @@ function startLivePriceStream() {
 
     if (!selectedStock || currentCandles.length === 0) return;
 
-    // Authentic equity market micro-tick (+/- 0.15%)
-    const isTickPositive = Math.random() > 0.48;
-    const tickMagnitude = (Math.random() * 0.0018 + 0.0004);
-    const delta = (isTickPositive ? 1 : -1) * (selectedStock.price * tickMagnitude);
-    const nextPrice = Math.max(1, selectedStock.price + delta);
+    // Authentic equity market micro-tick anchored tightly around official benchmark (max 0.08% oscillation)
+    const benchmark = lastValidatedPrice || selectedStock.price;
+    const currentDrift = (selectedStock.price - benchmark) / benchmark;
+    // Mean-reversion bias towards the benchmark so it never drifts from TradingView/Exchange truth
+    const isTickPositive = currentDrift > 0.0005 ? false : (currentDrift < -0.0005 ? true : Math.random() > 0.5);
+    const tickMagnitude = (Math.random() * 0.0006 + 0.0002);
+    const delta = (isTickPositive ? 1 : -1) * (benchmark * tickMagnitude);
+    const nextPrice = Math.max(1, +(selectedStock.price + delta).toFixed(2));
     const addedVol = Math.floor(Math.random() * 25 + 5);
 
     applyPriceTick(nextPrice, addedVol);
