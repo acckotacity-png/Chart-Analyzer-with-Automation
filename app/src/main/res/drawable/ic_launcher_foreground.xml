@@ -1,0 +1,51 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Candle 1: Red bearish candle -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M37,44h-6v20h6z" />
+    <path
+        android:strokeColor="#EF4444"
+        android:strokeWidth="1.8"
+        android:pathData="M34,38v32" />
+
+    <!-- Candle 2: Green bullish candle -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M52,40h-6v18h6z" />
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="1.8"
+        android:pathData="M49,34v30" />
+
+    <!-- Candle 3: Tall green bullish breakout candle -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M67,32h-6v22h6z" />
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="1.8"
+        android:pathData="M64,26v34" />
+
+    <!-- Breakout Trend Line with Glow -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M28,66 L44,52 L56,56 L76,32" />
+
+    <!-- Arrow head at breakout -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M76,32 L69,33 L75,39 Z" />
+
+    <!-- AI Node / Sparkle -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M78,22 L79.5,25.5 L83,27 L79.5,28.5 L78,32 L76.5,28.5 L73,27 L76.5,25.5 Z" />
+</vector>

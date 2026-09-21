@@ -1,0 +1,6 @@
+{
+  "name": "Chart Analyzer",
+  "description": "AI-powered stock and chart analyzer SaaS app with real-time candlestick charts, automated Buy/Hold/Sell insights for beginners, technical indicators, and cloud connect.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
