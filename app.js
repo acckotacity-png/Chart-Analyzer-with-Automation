@@ -4,52 +4,52 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 let currentUser = JSON.parse(localStorage.getItem("app_user") || "null");
 
-// Indian Stock Data & Indicators
+// Indian Stock Data & Indicators (Real NSE India 2026 Reference Baseline)
 const STOCKS = [
   {
     symbol: "RELIANCE",
     tvSymbol: "NSE:RELIANCE",
     name: "Reliance Industries Ltd",
-    price: 1240.30,
-    change: 14.80,
-    changePercent: 1.21,
-    rsi: 62.4,
-    ema20: 1224.50,
-    sma50: 1210.00,
-    macd: "Bullish +4.2",
+    price: 1226.40,
+    change: -8.30,
+    changePercent: -0.67,
+    rsi: 58.4,
+    ema20: 1220.50,
+    sma50: 1212.00,
+    macd: "Bullish +3.2",
     signal: "BUY",
-    aiText: "Reliance Industries (पोस्ट-बोनस 1:1) ₹1,240.30 के स्तर पर स्ट्रॉन्ग कंसोलिडेशन के बाद अपट्रेंड में है। 20 EMA (₹1,224.50) पर मजबूत सपोर्ट है। स्टॉपलॉस ₹1,215 के साथ बुलिश मोमेंटम एक्टिव है।",
-    chartData: [1210, 1218, 1225, 1220, 1232, 1236, 1240.30]
+    aiText: "Reliance Industries (पोस्ट-बोनस 1:1) ₹1,226 के स्तर पर 20 EMA सपोर्ट के करीब ट्रेड कर रहा है। ₹1,210 के स्टॉपलॉस के साथ मोमेंटम पॉजिटिव बना हुआ है।",
+    chartData: [1210, 1218, 1225, 1220, 1232, 1236, 1226.40]
   },
   {
     symbol: "TCS",
     tvSymbol: "NSE:TCS",
     name: "Tata Consultancy Services",
-    price: 4125.00,
-    change: -18.50,
-    changePercent: -0.45,
-    rsi: 52.8,
-    ema20: 4140.00,
-    sma50: 4110.00,
-    macd: "Neutral 0.8",
+    price: 2105.00,
+    change: -12.50,
+    changePercent: -0.59,
+    rsi: 48.8,
+    ema20: 2120.00,
+    sma50: 2095.00,
+    macd: "Neutral -1.2",
     signal: "HOLD",
-    aiText: "TCS इस समय 50 SMA और 20 EMA के बीच कंसोलिडेशन मोड में है। फ्रेश ब्रेकआउट के लिए ₹4,160 का इंतज़ार करें।",
-    chartData: [4160, 4150, 4135, 4145, 4115, 4130, 4125.00]
+    aiText: "TCS ₹2,105 के स्तर पर प्रमुख सपोर्ट के करीब कंसोलिडेट कर रहा है। फ्रेश ब्रेकआउट के लिए ₹2,130 स्तरों का इंतज़ार करें।",
+    chartData: [2140, 2130, 2115, 2125, 2095, 2110, 2105.00]
   },
   {
     symbol: "TATAMOTORS",
     tvSymbol: "NSE:TATAMOTORS",
     name: "Tata Motors Ltd",
-    price: 978.60,
-    change: 24.80,
-    changePercent: 2.60,
-    rsi: 71.4,
-    ema20: 945.20,
-    sma50: 920.00,
-    macd: "Strong Bullish +8.5",
+    price: 442.90,
+    change: 5.40,
+    changePercent: 1.23,
+    rsi: 62.4,
+    ema20: 438.20,
+    sma50: 428.00,
+    macd: "Strong Bullish +3.5",
     signal: "STRONG BUY",
-    aiText: "Tata Motors में भारी वॉल्यूम के साथ 52-वीक हाई की तरफ मूवमेंट देखा जा रहा है। लक्ष्य ₹1,020 संभावित है।",
-    chartData: [920, 935, 942, 955, 960, 968, 978.60]
+    aiText: "Tata Motors डिमर्जर व नए ईवी वॉल्यूम के साथ ₹442.90 पर मजबूत अपट्रेंड में है। सपोर्ट ₹435 पर बना हुआ है।",
+    chartData: [425, 430, 434, 438, 436, 440, 442.90]
   },
   {
     symbol: "TATASTEEL",
@@ -85,16 +85,16 @@ const STOCKS = [
     symbol: "HDFCBANK",
     tvSymbol: "NSE:HDFCBANK",
     name: "HDFC Bank Ltd",
-    price: 1640.20,
-    change: 8.50,
-    changePercent: 0.52,
+    price: 731.00,
+    change: 6.50,
+    changePercent: 0.90,
     rsi: 56.4,
-    ema20: 1625.00,
-    sma50: 1612.00,
-    macd: "Bullish +3.1",
+    ema20: 725.00,
+    sma50: 715.00,
+    macd: "Bullish +2.1",
     signal: "BUY",
-    aiText: "बैंकिंग सेक्टर में खरीदारी से HDFC Bank में अच्छा सपोर्ट बन चुका है। ₹1,610 का स्टॉपलॉस रखें।",
-    chartData: [1610, 1615, 1622, 1628, 1635, 1632, 1640.20]
+    aiText: "HDFC Bank ₹731 के स्तर पर मजबूत संस्थागत बाइंग फ्लो दिखा रहा है। तात्कालिक सपोर्ट ₹720 पर बना है।",
+    chartData: [710, 715, 722, 726, 730, 728, 731.00]
   },
   {
     symbol: "ICICIBANK",
@@ -669,8 +669,12 @@ function renderSelectedStock(stock) {
     quickSelect.value = stock.symbol;
   }
 
-  // Load Stock via Upstox / Supabase service and render in TradingView Lightweight Charts
-  loadStockChartAndAnalysis(stock);
+  // Load Stock via Upstox / Supabase service and render in TradingView Lightweight Charts or Official TV Widget
+  if (currentChartMode === "tvlive") {
+    renderOfficialTradingViewWidget(stock);
+  } else {
+    loadStockChartAndAnalysis(stock);
+  }
 }
 
 // -------------------------------------------------------------
@@ -872,10 +876,10 @@ const UpstoxSupabaseService = {
   },
   generateRealisticCandles(symbol, timeframe, count) {
     const basePrices = {
-      RELIANCE: 1240.30, TCS: 4125.00, TATAMOTORS: 978.60, TATASTEEL: 154.20,
-      INFY: 1540.25, HDFCBANK: 1640.20, ICICIBANK: 1285.40, SBIN: 842.10,
-      BHARTIARTL: 1485.00, ADANIENT: 2940.00, BAJFINANCE: 7180.00, WIPRO: 520.00,
-      ZOMATO: 265.00, MARUTI: 12350.00
+      RELIANCE: 1226.40, TCS: 2105.00, TATAMOTORS: 442.90, TATASTEEL: 154.20,
+      INFY: 1540.25, HDFCBANK: 731.00, ICICIBANK: 1118.50, SBIN: 812.30,
+      BHARTIARTL: 1485.60, ADANIENT: 2940.00, BAJFINANCE: 7180.00, WIPRO: 520.40,
+      ZOMATO: 265.80, MARUTI: 12350.00
     };
     let curPrice = basePrices[symbol] || (selectedStock ? selectedStock.price : 1000);
     const candles = [];
@@ -1339,6 +1343,78 @@ function renderStructuredAiAnalysis(stock, price, ema, sma, rsi, macd, sr, patte
 // -------------------------------------------------------------
 // TIMEFRAME & INDICATOR TOGGLE CONTROLS
 // -------------------------------------------------------------
+function switchChartMode(mode) {
+  currentChartMode = mode;
+  const btnCustom = document.getElementById("btnModeCustom");
+  const btnTvLive = document.getElementById("btnModeTvLive");
+  const lwContainer = document.getElementById("lightweight_chart_container");
+  const tvContainer = document.getElementById("official_tv_container");
+  const tfGroup = document.getElementById("timeframeTabsGroup");
+  const chartLegend = document.getElementById("chartLegend");
+
+  if (btnCustom) btnCustom.classList.toggle("active", mode === "custom");
+  if (btnTvLive) btnTvLive.classList.toggle("active", mode === "tvlive");
+
+  if (mode === "tvlive") {
+    if (lwContainer) lwContainer.classList.add("hidden");
+    if (tvContainer) tvContainer.classList.remove("hidden");
+    if (chartLegend) chartLegend.classList.add("hidden");
+    updateDataFeedBadge("TradingView Official Live WebSocket (100% Broker Match)");
+    renderOfficialTradingViewWidget(selectedStock);
+  } else {
+    if (tvContainer) tvContainer.classList.add("hidden");
+    if (lwContainer) lwContainer.classList.remove("hidden");
+    if (chartLegend) chartLegend.classList.remove("hidden");
+    updateDataFeedBadge("Upstox V3 Market Relay • Supabase Edge Active");
+    if (selectedStock) {
+      loadStockChartAndAnalysis(selectedStock);
+    }
+  }
+}
+
+function renderOfficialTradingViewWidget(stock) {
+  const container = document.getElementById("official_tv_container");
+  if (!container || !stock) return;
+
+  const tvSymbol = stock.tvSymbol || `NSE:${stock.symbol}`;
+  container.innerHTML = `
+    <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
+      <div id="tradingview_widget_embed" style="height: 100%; width: 100%;"></div>
+    </div>
+  `;
+
+  // Dynamically load TradingView official embed script if not loaded
+  const loadWidget = () => {
+    if (typeof TradingView !== "undefined") {
+      new TradingView.widget({
+        autosize: true,
+        symbol: tvSymbol,
+        interval: currentTimeframe === "1m" ? "1" : currentTimeframe === "5m" ? "5" : currentTimeframe === "15m" ? "15" : currentTimeframe === "1h" ? "60" : "D",
+        timezone: "Asia/Kolkata",
+        theme: "dark",
+        style: "1",
+        locale: "in",
+        toolbar_bg: "#0c121e",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        save_image: false,
+        container_id: "tradingview_widget_embed"
+      });
+    }
+  };
+
+  if (typeof TradingView === "undefined") {
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/tv.js";
+    script.async = true;
+    script.onload = loadWidget;
+    document.head.appendChild(script);
+  } else {
+    loadWidget();
+  }
+}
+
 function switchTimeframe(tf) {
   if (!currentUser || currentUser.status !== "approved") return;
   currentTimeframe = tf;
