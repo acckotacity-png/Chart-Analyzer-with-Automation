@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.MainViewModel
 import com.example.ui.screens.AssistantScreen
+import com.example.ui.screens.AuthGateScreen
 import com.example.ui.screens.CloudConnectScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.FresherHubScreen
@@ -70,7 +72,20 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainApp(viewModel: MainViewModel = viewModel()) {
+    val currentUser by viewModel.currentUser.collectAsState()
     var selectedScreenIndex by remember { mutableIntStateOf(0) }
+
+    // If user is not logged in or not approved, show AuthGateScreen
+    val user = currentUser
+    if (user == null || !user.isApproved) {
+        AuthGateScreen(
+            viewModel = viewModel,
+            onApprovedAccess = {
+                // User approved, ready
+            }
+        )
+        return
+    }
 
     val screens = listOf(
         Screen.Dashboard,

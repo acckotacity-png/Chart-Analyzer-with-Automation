@@ -36,11 +36,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = ChartDatabase.getDatabase(application)
     private val watchlistDao = database.watchlistDao()
     private val supabaseWatchlistRepo = SupabaseWatchlistRepository()
+    private val supabaseAuthRepo = com.example.data.supabase.SupabaseAuthRepository()
     private val financialMarketRepo = FinancialMarketDataRepository()
+
+    // Auth & Access Control
+    private val _currentUser = MutableStateFlow<com.example.data.model.AppUser?>(prefsManager.getLoggedUser())
+    val currentUser: StateFlow<com.example.data.model.AppUser?> = _currentUser.asStateFlow()
+
+    private val _authLoading = MutableStateFlow(false)
+    val authLoading: StateFlow<Boolean> = _authLoading.asStateFlow()
+
+    private val _authMessage = MutableStateFlow<String?>(null)
+    val authMessage: StateFlow<String?> = _authMessage.asStateFlow()
+
+    private val _allUsersList = MutableStateFlow<List<com.example.data.model.AppUser>>(emptyList())
+    val allUsersList: StateFlow<List<com.example.data.model.AppUser>> = _allUsersList.asStateFlow()
 
     // Real-time Provider status
     private val _isFetchingLiveProvider = MutableStateFlow(false)
     val isFetchingLiveProvider: StateFlow<Boolean> = _isFetchingLiveProvider.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _marketProviderStatus = MutableStateFlow<String?>("Alpha Vantage / Global Quote Feed Ready")
     val marketProviderStatus: StateFlow<String?> = _marketProviderStatus.asStateFlow()
@@ -183,7 +200,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _isFetchingLiveProvider.value = false
+            _isRefreshing.value = false
         }
+    }
+
+    /**
+     * Triggered by SwipeRefresh on dashboard to refresh prices, candles, and technical indicators.
+     */
+    fun refreshDashboardData() {
+        _isRefreshing.value = true
+        // Refresh indices
+        _marketIndices.value = repository.getMarketIndices()
+        // Refresh selected stock via live provider & technical analysis
+        fetchRealTimeMarketPrice()
     }
 
     fun setFinancialProviderApiKey(apiKey: String) {
@@ -408,5 +437,102 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prefsManager.setPinLockEnabled(enabled)
         prefsManager.setPinCode(pin)
         _isPinLockEnabled.value = enabled
+    }
+
+    // User Registration & Supabase Access Approval
+    fun requestUserAccess(fullName: String, mobileNumber: String, email: String) {
+        _authLoading.value = true
+        _authMessage.value = null
+        viewModelScope.launch {
+            val result = supabaseAuthRepo.registerUser(fullName, mobileNumber, email)
+            _authLoading.value = false
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _currentUser.value = user
+                prefsManager.saveLoggedUser(user)
+                if (user?.isApproved == true) {
+                    _authMessage.value = "Login successful! Welcome ${user.full_name}"
+                } else {
+                    _authMessage.value = "Access Request Submitted! Waiting for Admin Approval."
+                }
+            } else {
+                _authMessage.value = "Error: ${result.exceptionOrNull()?.message ?: "Failed to connect to Supabase"}"
+            }
+        }
+    }
+
+    fun loginUser(emailOrMobile: String) {
+        if (emailOrMobile.isBlank()) return
+        _authLoading.value = true
+        _authMessage.value = null
+        viewModelScope.launch {
+            val result = supabaseAuthRepo.checkUserStatus(emailOrMobile.trim())
+            _authLoading.value = false
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                if (user != null) {
+                    _currentUser.value = user
+                    prefsManager.saveLoggedUser(user)
+                    if (user.isApproved) {
+                        _authMessage.value = "Welcome back, ${user.full_name}!"
+                    } else if (user.status == "rejected") {
+                        _authMessage.value = "Your request was declined by Admin."
+                    } else {
+                        _authMessage.value = "Your access request is still PENDING Admin approval."
+                    }
+                } else {
+                    _authMessage.value = "User not found. Please submit registration request."
+                }
+            } else {
+                _authMessage.value = "Connection error: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun refreshUserStatus() {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val res = supabaseAuthRepo.checkUserStatus(user.email)
+            if (res.isSuccess && res.getOrNull() != null) {
+                val updated = res.getOrNull()
+                _currentUser.value = updated
+                prefsManager.saveLoggedUser(updated)
+            }
+        }
+    }
+
+    fun loadAllUsersForAdmin() {
+        viewModelScope.launch {
+            val res = supabaseAuthRepo.getAllUsers()
+            if (res.isSuccess) {
+                _allUsersList.value = res.getOrNull() ?: emptyList()
+            }
+        }
+    }
+
+    fun approveUser(targetUserId: String) {
+        viewModelScope.launch {
+            val adminEmail = _currentUser.value?.email ?: "admin"
+            val res = supabaseAuthRepo.updateUserStatus(targetUserId, "approved", adminEmail)
+            if (res.isSuccess) {
+                loadAllUsersForAdmin()
+            }
+        }
+    }
+
+    fun rejectUser(targetUserId: String) {
+        viewModelScope.launch {
+            val adminEmail = _currentUser.value?.email ?: "admin"
+            val res = supabaseAuthRepo.updateUserStatus(targetUserId, "rejected", adminEmail)
+            if (res.isSuccess) {
+                loadAllUsersForAdmin()
+            }
+        }
+    }
+
+    fun logout() {
+        _currentUser.value = null
+        prefsManager.saveLoggedUser(null)
+        _authMessage.value = "Logged out successfully."
     }
 }

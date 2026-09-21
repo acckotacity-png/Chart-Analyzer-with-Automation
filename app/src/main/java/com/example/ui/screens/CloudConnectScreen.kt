@@ -374,6 +374,125 @@ fun CloudConnectScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // 3.5 Admin User Management & Rights Approval Panel
+        val currentUser by viewModel.currentUser.collectAsState()
+        val allUsers by viewModel.allUsersList.collectAsState()
+
+        CardContainer(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Admin: User Approval & Rights",
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Button(
+                        onClick = { viewModel.loadAllUsersForAdmin() },
+                        colors = ButtonDefaults.buttonColors(containerColor = ChartCardBgElevated),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Refresh List", fontSize = 11.sp, color = NeonCyan)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (currentUser?.isAdmin == true)
+                        "Logged in as Admin (${currentUser?.email}). You have full rights to approve/reject user registration requests."
+                    else
+                        "Logged in as: ${currentUser?.full_name ?: "Guest"} (${currentUser?.email ?: ""}) - Status: ${currentUser?.status?.uppercase() ?: "PENDING"}",
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (allUsers.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ChartCardBgElevated)
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Tap 'Refresh List' to load registered users from Supabase", color = TextMuted, fontSize = 12.sp)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        allUsers.forEach { u ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(ChartCardBgElevated)
+                                    .border(1.dp, ChartBorder, RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(u.full_name.ifBlank { "User" }, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("${u.mobile_number} • ${u.email}", color = TextSecondary, fontSize = 11.sp)
+                                        Text(
+                                            "Status: ${u.status.uppercase()}",
+                                            color = when (u.status.lowercase()) {
+                                                "approved" -> BullishGreen
+                                                "rejected" -> BearishRed
+                                                else -> HoldAmber
+                                            },
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    if (currentUser?.isAdmin == true) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            if (u.status != "approved") {
+                                                Button(
+                                                    onClick = { viewModel.approveUser(u.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = BullishGreen),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.testTag("approve_user_${u.id}")
+                                                ) {
+                                                    Text("Approve", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            if (u.status != "rejected" && u.role != "admin") {
+                                                Button(
+                                                    onClick = { viewModel.rejectUser(u.id) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = BearishRed),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.testTag("reject_user_${u.id}")
+                                                ) {
+                                                    Text("Reject", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // 4. Data Security Guarantee
         CardContainer(modifier = Modifier.padding(horizontal = 16.dp)) {
             Row(

@@ -17,6 +17,42 @@ class PreferencesManager(context: Context) {
         private const val KEY_PIN_CODE = "pin_code"
         private const val KEY_REALTIME_SPEED = "realtime_speed_sec"
         private const val KEY_PREFERRED_LANGUAGE = "preferred_language" // "hi" or "en"
+        private const val KEY_LOGGED_USER_EMAIL = "logged_user_email"
+        private const val KEY_LOGGED_USER_NAME = "logged_user_name"
+        private const val KEY_LOGGED_USER_MOBILE = "logged_user_mobile"
+        private const val KEY_LOGGED_USER_ROLE = "logged_user_role"
+        private const val KEY_LOGGED_USER_STATUS = "logged_user_status"
+    }
+
+    fun saveLoggedUser(user: com.example.data.model.AppUser?) {
+        if (user == null) {
+            prefs.edit()
+                .remove(KEY_LOGGED_USER_EMAIL)
+                .remove(KEY_LOGGED_USER_NAME)
+                .remove(KEY_LOGGED_USER_MOBILE)
+                .remove(KEY_LOGGED_USER_ROLE)
+                .remove(KEY_LOGGED_USER_STATUS)
+                .apply()
+        } else {
+            prefs.edit()
+                .putString(KEY_LOGGED_USER_EMAIL, user.email)
+                .putString(KEY_LOGGED_USER_NAME, user.full_name)
+                .putString(KEY_LOGGED_USER_MOBILE, user.mobile_number)
+                .putString(KEY_LOGGED_USER_ROLE, user.role)
+                .putString(KEY_LOGGED_USER_STATUS, user.status)
+                .apply()
+        }
+    }
+
+    fun getLoggedUser(): com.example.data.model.AppUser? {
+        val email = prefs.getString(KEY_LOGGED_USER_EMAIL, null) ?: return null
+        return com.example.data.model.AppUser(
+            email = email,
+            full_name = prefs.getString(KEY_LOGGED_USER_NAME, "") ?: "",
+            mobile_number = prefs.getString(KEY_LOGGED_USER_MOBILE, "") ?: "",
+            role = prefs.getString(KEY_LOGGED_USER_ROLE, "user") ?: "user",
+            status = prefs.getString(KEY_LOGGED_USER_STATUS, "pending") ?: "pending"
+        )
     }
 
     fun getSupabaseConfig(): SupabaseConfig {
