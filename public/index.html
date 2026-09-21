@@ -8,6 +8,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://s3.tradingview.com/tv.js"></script>
   <style>
     :root {
@@ -287,23 +288,120 @@
     }
 
     /* Key Indicators & AI Insight */
-    .indicators-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 16px; }
+    .indicator-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .indicator-pill:hover {
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+    .indicator-pill.active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .indicator-pill.active-sma {
+      background: rgba(255, 170, 0, 0.15);
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .indicator-pill.active-bb {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: #a855f7;
+      color: #c084fc;
+    }
+    .indicator-pill.active-vwap {
+      background: rgba(236, 72, 153, 0.15);
+      border-color: #ec4899;
+      color: #f472b6;
+    }
+    .indicator-pill.active-sr {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: #22c55e;
+      color: #4ade80;
+    }
+
+    .indicators-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; margin-top: 14px; }
     .ind-card {
       background: var(--card-elevated);
-      padding: 10px 12px;
+      padding: 10px 10px;
       border-radius: 8px;
       border: 1px solid var(--border);
       text-align: center;
     }
-    .ind-card .label { font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
-    .ind-card .val { font-size: 14px; font-weight: 800; margin-top: 4px; color: var(--cyan); }
+    .ind-card .label { font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .ind-card .val { font-size: 13px; font-weight: 800; margin-top: 4px; color: var(--cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ind-card .sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 
-    .ai-box {
+    /* AI Analysis Section & Grid */
+    .ai-analysis-container {
       margin-top: 16px;
-      background: rgba(0, 229, 255, 0.05);
-      border: 1px solid rgba(0, 229, 255, 0.25);
-      border-radius: 10px;
-      padding: 14px;
+      background: rgba(0, 229, 255, 0.03);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .ai-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .ai-card {
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .ai-card-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ai-card-content {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    /* Modal for Supabase & Upstox Settings */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-content {
+      background: var(--card);
+      border: 1px solid var(--cyan);
+      border-radius: 14px;
+      max-width: 500px;
+      width: 100%;
+      padding: 22px;
+      box-shadow: 0 10px 40px rgba(0, 229, 255, 0.2);
     }
 
     .hidden { display: none !important; }
@@ -474,79 +572,228 @@
             </div>
           </div>
 
-          <!-- Chart Mode & Controls -->
+          <!-- Chart Controls Bar: Timeframes, Indicators, and Data Source -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; gap: 6px;">
-              <button id="modeTvBtn" class="tab-btn active" onclick="switchChartMode('tradingview')">
-                <i class="fa-solid fa-chart-candlestick" style="color:var(--cyan)"></i> TradingView Live (असली TV चार्ट)
-              </button>
-              <button id="modeAiBtn" class="tab-btn" onclick="switchChartMode('ai')">
-                <i class="fa-solid fa-chart-line"></i> AI Overview Trend
+            <!-- Timeframe selector -->
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Timeframe:</span>
+              <div class="timeframe-tabs">
+                <button class="tab-btn" id="tf_1m" onclick="switchTimeframe('1m')">1m</button>
+                <button class="tab-btn" id="tf_5m" onclick="switchTimeframe('5m')">5m</button>
+                <button class="tab-btn" id="tf_15m" onclick="switchTimeframe('15m')">15m</button>
+                <button class="tab-btn" id="tf_1h" onclick="switchTimeframe('1h')">1h</button>
+                <button class="tab-btn active" id="tf_1D" onclick="switchTimeframe('1D')">1D</button>
+              </div>
+            </div>
+
+            <!-- Indicator toggles -->
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Overlays:</span>
+              <div class="indicator-pill active" id="pill_ema" onclick="toggleIndicator('ema')">
+                <i class="fa-solid fa-chart-line" style="color:var(--cyan)"></i> EMA 20
+              </div>
+              <div class="indicator-pill active-sma" id="pill_sma" onclick="toggleIndicator('sma')">
+                <i class="fa-solid fa-chart-line" style="color:var(--amber)"></i> SMA 50
+              </div>
+              <div class="indicator-pill active-vwap" id="pill_vwap" onclick="toggleIndicator('vwap')">
+                <i class="fa-solid fa-wave-square" style="color:#ec4899"></i> VWAP
+              </div>
+              <div class="indicator-pill active-bb" id="pill_bb" onclick="toggleIndicator('bb')">
+                <i class="fa-solid fa-arrows-split-up-and-left" style="color:#a855f7"></i> Bollinger
+              </div>
+              <div class="indicator-pill active-sr" id="pill_sr" onclick="toggleIndicator('sr')">
+                <i class="fa-solid fa-bars" style="color:#22c55e"></i> S/R Levels
+              </div>
+              <div class="indicator-pill active" id="pill_vol" onclick="toggleIndicator('volume')">
+                <i class="fa-solid fa-chart-simple" style="color:var(--cyan)"></i> Volume
+              </div>
+              <button class="tab-btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="openSupabaseModal()" title="Upstox API V3 & Supabase Edge Function Settings">
+                <i class="fa-solid fa-shield-halved"></i> Data Bridge
               </button>
             </div>
+          </div>
+
+          <!-- TradingView Lightweight Chart Container -->
+          <div id="chartContainerWrapper" style="position: relative; height: 440px; width: 100%; border-radius: 10px; overflow: hidden; background: #0c121e; border: 1px solid var(--border);">
+            <div id="lightweight_chart_container" style="height: 100%; width: 100%;"></div>
             
-            <div id="aiTimeframeTabs" class="timeframe-tabs hidden">
-              <button class="tab-btn" onclick="switchTimeframe('1D')">1D</button>
-              <button class="tab-btn active" onclick="switchTimeframe('1W')">1W</button>
-              <button class="tab-btn" onclick="switchTimeframe('1M')">1M</button>
-              <button class="tab-btn" onclick="switchTimeframe('1Y')">1Y</button>
+            <!-- Real-Time Crosshair & OHLC Legend Overlay -->
+            <div id="chartLegend" style="position: absolute; top: 12px; left: 14px; z-index: 10; font-size: 11px; pointer-events: none; color: var(--text-muted); background: rgba(12, 18, 30, 0.85); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
+              <span id="legendSymbol" style="font-weight: 800; color: var(--text);">RELIANCE</span>
+              <span id="legendInterval" style="margin-left: 6px; font-weight: 700; color: var(--cyan);">1D</span>
+              <span id="legendOhlc" style="margin-left: 8px; font-family: monospace; color: var(--text);">O: 1235.00 H: 1248.50 L: 1228.00 C: 1240.30</span>
             </div>
 
-            <div id="tvLiveInfo" style="font-size: 11px; color: var(--cyan); display: flex; align-items: center; gap: 6px;">
-              <i class="fa-solid fa-bolt"></i> Real-Time NSE Candlesticks & Live Price
+            <!-- Upstox / Supabase Status Pill on Chart -->
+            <div style="position: absolute; bottom: 10px; left: 14px; z-index: 10; font-size: 10px; color: var(--cyan); background: rgba(12, 18, 30, 0.85); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; gap: 5px;">
+              <span class="live-dot"></span>
+              <span id="dataFeedBadge">Upstox V3 Market Relay • Supabase Edge Active</span>
             </div>
           </div>
 
-          <!-- TradingView Live Chart Wrapper -->
-          <div id="tvChartWrapper" style="position: relative; height: 420px; width: 100%; border-radius: 10px; overflow: hidden; background: #0c121e; border: 1px solid var(--border);">
-            <div id="tradingview_chart_container" style="height: 100%; width: 100%;"></div>
-          </div>
-
-          <!-- AI Chart.js Canvas (Shown in AI Overview mode) -->
-          <div id="aiChartWrapper" class="hidden" style="position: relative; height: 320px; width: 100%;">
-            <canvas id="stockChartCanvas"></canvas>
-          </div>
-
-          <!-- Technical Indicators Row -->
+          <!-- Comprehensive Technical Indicators Row (Analysis Engine Outputs) -->
           <div class="indicators-row">
             <div class="ind-card">
               <div class="label">RSI (14)</div>
               <div class="val" id="indRsi">62.4</div>
+              <div class="sub" id="indRsiSub">Bullish Zone</div>
             </div>
             <div class="ind-card">
               <div class="label">20 EMA</div>
               <div class="val" id="indEma">₹1,224.50</div>
+              <div class="sub" id="indEmaSub" style="color:var(--green)">Above 20 EMA</div>
             </div>
             <div class="ind-card">
               <div class="label">50 SMA</div>
               <div class="val" id="indSma">₹1,210.00</div>
+              <div class="sub" id="indSmaSub" style="color:var(--green)">Golden Trend</div>
             </div>
             <div class="ind-card">
-              <div class="label">MACD</div>
-              <div class="val" id="indMacd" style="color:var(--green)">Bullish +4.2</div>
+              <div class="label">MACD (12,26,9)</div>
+              <div class="val" id="indMacd" style="color:var(--green)">+4.20</div>
+              <div class="sub" id="indMacdSub">Bullish Crossover</div>
+            </div>
+            <div class="ind-card">
+              <div class="label">Bollinger Bands</div>
+              <div class="val" id="indBb">₹1,262 / ₹1,195</div>
+              <div class="sub" id="indBbSub">Band Expanding</div>
+            </div>
+            <div class="ind-card">
+              <div class="label">VWAP</div>
+              <div class="val" id="indVwap">₹1,236.80</div>
+              <div class="sub" id="indVwapSub" style="color:var(--green)">Bullish Deviation</div>
+            </div>
+            <div class="ind-card">
+              <div class="label">ATR (14)</div>
+              <div class="val" id="indAtr">₹22.40</div>
+              <div class="sub">1.8% Daily Volatility</div>
+            </div>
+            <div class="ind-card">
+              <div class="label">Volume Ratio</div>
+              <div class="val" id="indVolRatio">1.45x</div>
+              <div class="sub" id="indVolSub">Above 20-Avg</div>
+            </div>
+            <div class="ind-card">
+              <div class="label">Support / Resistance</div>
+              <div class="val" id="indSrLevels" style="font-size:11px;">S: ₹1,220 | R: ₹1,265</div>
+              <div class="sub" id="indSrSub">Near Resistance</div>
             </div>
           </div>
 
-          <!-- AI Gemini Recommendation Box -->
-          <div class="ai-box">
-            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--cyan); font-size: 13px;">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>AI Analysis & Trade Setup (Bilingual)</span>
+          <!-- Future AI Layer ("Chart क्या बता रहा है?") -->
+          <div class="ai-analysis-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--cyan); font-size: 14px;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Technical Analysis & Trade Setup Engine (Chart क्या बता रहा है?)</span>
+              </div>
+              <span style="font-size: 11px; background: rgba(255,170,0,0.12); color: var(--amber); border: 1px solid rgba(255,170,0,0.3); padding: 2px 8px; border-radius: 4px; font-weight: 700;">
+                <i class="fa-solid fa-triangle-exclamation"></i> No Guaranteed Returns • Pure Technical Evidence
+              </span>
             </div>
-            <div id="aiInsightText" style="margin-top: 6px; font-size: 13px; color: var(--text); line-height: 1.5;">
-              स्टॉक 20 EMA से ऊपर ट्रेड कर रहा है। RSI 64.2 एक स्वस्थ तेजी (Bullish Momentum) दर्शाता है। स्टॉपलॉस ₹2,810 के साथ नई खरीददारी का सुझाव है।
+
+            <!-- Structured 6-Block Analysis Grid -->
+            <div class="ai-grid">
+              <!-- Block 1: Trend -->
+              <div class="ai-card">
+                <div class="ai-card-title"><i class="fa-solid fa-arrow-trend-up"></i> 1. Trend Direction (ट्रेंड)</div>
+                <div class="ai-card-content" id="aiBlockTrend">
+                  स्टॉक 20 EMA और 50 SMA दोनों प्रमुख मूविंग एवरेजेस से ऊपर ट्रेड कर रहा है। कैंडल्स लगातार हायर-हाई और हायर-लो बना रही हैं।
+                </div>
+              </div>
+
+              <!-- Block 2: Momentum -->
+              <div class="ai-card">
+                <div class="ai-card-title"><i class="fa-solid fa-gauge-high"></i> 2. Momentum & Oscillators (मोमेंटम)</div>
+                <div class="ai-card-content" id="aiBlockMomentum">
+                  RSI 62.4 स्वस्थ बुलिश ज़ोन में है (न तो ओवरसोल्ड, न ही ओवरबॉट)। MACD लाइन सिग्नल लाइन के ऊपर सकारात्मक विस्तार दर्शा रही है।
+                </div>
+              </div>
+
+              <!-- Block 3: Support & Resistance -->
+              <div class="ai-card">
+                <div class="ai-card-title"><i class="fa-solid fa-layer-group"></i> 3. Key Levels (सपोर्ट और रेसिस्टेंस)</div>
+                <div class="ai-card-content" id="aiBlockLevels">
+                  <b>तात्कालिक सपोर्ट:</b> ₹1,220 (20 EMA क्लस्टर)<br>
+                  <b>प्रमुख रेसिस्टेंस:</b> ₹1,265 (अंतिम स्विंग हाई)
+                </div>
+              </div>
+
+              <!-- Block 4: Candlestick & Price Action -->
+              <div class="ai-card">
+                <div class="ai-card-title"><i class="fa-solid fa-chart-simple"></i> 4. Price Action Setup (पैटर्न)</div>
+                <div class="ai-card-content" id="aiBlockPattern">
+                  कंसोलिडेशन रेंज के ऊपरी छोर पर बुलिश मारूबोज़ू कैंडल का निर्माण हुआ है, जो बायर्स की सक्रियता का संकेत देता है।
+                </div>
+              </div>
+
+              <!-- Block 5: Risk & Invalidation -->
+              <div class="ai-card">
+                <div class="ai-card-title"><i class="fa-solid fa-shield-virus"></i> 5. Risk Factors & Stoploss (जोखिम)</div>
+                <div class="ai-card-content" id="aiBlockRisk">
+                  <b>इनवैलिडेशन स्तर:</b> यदि भाव ₹1,215 से नीचे बंद होता है, तो यह बुलिश संरचना अमान्य हो जाएगी। रिस्क-रिवॉर्ड 1:2.4 पर अनुकूल है।
+                </div>
+              </div>
+
+              <!-- Block 6: "Chart क्या बता रहा है?" -->
+              <div class="ai-card" style="border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.06);">
+                <div class="ai-card-title" style="color: var(--cyan);"><i class="fa-solid fa-comment-dots"></i> 6. "Chart क्या बता रहा है?" (Summary)</div>
+                <div class="ai-card-content" id="aiBlockSummary" style="font-weight: 500;">
+                  चार्ट वर्तमान में बायर्स के नियंत्रण में है। ब्रेकआउट स्तर के पास वॉल्यूम में 1.45x की वृद्धि देखी गई है। ट्रेडर्स को रेजिस्टेंस ज़ोन (₹1,265) के पास सतर्क रहकर ट्रेलिंग स्टॉपलॉस का प्रयोग करना चाहिए।
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- SUPABASE & UPSTOX BRIDGE MODAL -->
+    <div id="supabaseModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <h2 style="font-size: 16px; margin-bottom: 0; color: var(--cyan);"><i class="fa-solid fa-shield-halved"></i> Supabase & Upstox V3 Bridge</h2>
+          <button onclick="closeSupabaseModal()" style="background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer;">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
+          🔒 <b>100% Secure Architecture:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
+        </p>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 11px;">Supabase Edge Function URL</label>
+          <input type="text" id="supabaseFunctionUrl" class="form-control" style="font-size: 12px;" placeholder="https://xyz.supabase.co/functions/v1/upstox-market-data">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label style="font-size: 11px;">Supabase Anon Key</label>
+          <input type="password" id="supabaseAnonKey" class="form-control" style="font-size: 12px;" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+
+        <div style="background: var(--card-elevated); padding: 10px; border-radius: 8px; margin-bottom: 14px; font-size: 11px; border: 1px solid var(--border);">
+          <div style="color: var(--cyan); font-weight: 700; margin-bottom: 4px;"><i class="fa-solid fa-circle-info"></i> Development / Live Status</div>
+          <div id="bridgeStatusText" style="color: var(--text);">वर्तमान में <b>Upstox V3 Simulated High-Frequency Engine</b> सक्रिय है, जो वास्तविक भारतीय बाज़ार (NSE) की कैंडल्स और 60fps टिक्स स्ट्रीम कर रहा है।</div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="flex: 1; font-size: 12px;" onclick="saveSupabaseSettings()">
+            <i class="fa-solid fa-floppy-disk"></i> Save & Connect
+          </button>
+          <button class="btn btn-secondary" style="font-size: 12px;" onclick="testSupabaseConnection()">
+            <i class="fa-solid fa-satellite-dish"></i> Test Ping
+          </button>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <script src="public/app.js"></script>
+  <script src="app.js"></script>
   <script>
     if (typeof SUPABASE_URL === 'undefined') {
       const s = document.createElement('script');
-      s.src = 'app.js';
+      s.src = 'public/app.js';
       document.body.appendChild(s);
     }
   </script>
