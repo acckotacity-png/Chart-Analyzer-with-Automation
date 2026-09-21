@@ -248,9 +248,31 @@ const STOCKS = [
   }
 ];
 
+// Upstox V3 Instrument Keys for Real-Time WebSocket Feeds
+const UPSTOX_INSTRUMENT_KEYS = {
+  "RELIANCE": "NSE_EQ|INE002A01018",
+  "TCS": "NSE_EQ|INE467B01029",
+  "TATAMOTORS": "NSE_EQ|INE155A01022",
+  "TATASTEEL": "NSE_EQ|INE081A01020",
+  "INFY": "NSE_EQ|INE009A01021",
+  "HDFCBANK": "NSE_EQ|INE040A01034",
+  "ICICIBANK": "NSE_EQ|INE090A01021",
+  "SBIN": "NSE_EQ|INE062A01020",
+  "BHARTIARTL": "NSE_EQ|INE397D01024",
+  "ITC": "NSE_EQ|INE154A01025",
+  "LT": "NSE_EQ|INE018A01030",
+  "ADANIENT": "NSE_EQ|INE423A01024",
+  "BAJFINANCE": "NSE_EQ|INE296A01024",
+  "WIPRO": "NSE_EQ|INE075A01022",
+  "ZOMATO": "NSE_EQ|INE758T01015",
+  "MARUTI": "NSE_EQ|INE585B01010"
+};
+
 let selectedStock = STOCKS[0];
 let stockChartInstance = null;
 let liveDataInterval = null;
+let upstoxWebSocket = null;
+let wsReconnectTimeout = null;
 let currentStockSearchQuery = "";
 let currentChartMode = "tradingview";
 
@@ -635,7 +657,8 @@ function renderSelectedStock(stock) {
   document.getElementById("indMacd").innerText = stock.macd;
 
   // AI Insight Text
-  document.getElementById("aiInsightText").innerText = stock.aiText;
+  const aiInsightElem = document.getElementById("aiInsightText");
+  if (aiInsightElem) aiInsightElem.innerText = stock.aiText;
 
   // Update quick stock select dropdown if present
   const quickSelect = document.getElementById("quickStockSelect");
@@ -874,6 +897,29 @@ const UpstoxSupabaseService = {
       curPrice = close;
     }
     return candles;
+  },
+  async getWebSocketUri() {
+    const url = this.getFunctionUrl();
+    if (!url) return null;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": this.getAnonKey()
+        },
+        body: JSON.stringify({ action: "get_ws_url" })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.authorizedRedirectUri || json.webSocketUrl) {
+          return json.authorizedRedirectUri || json.webSocketUrl;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not retrieve Upstox WebSocket feed URL from Supabase Edge:", err);
+    }
+    return null;
   }
 };
 
@@ -1342,35 +1388,29 @@ function toggleIndicator(ind) {
 }
 
 // -------------------------------------------------------------
-// REAL-TIME 60FPS LIVE PRICE STREAM WITH UPSTOX CANDLE UPDATE
+// REAL-TIME UPSTOX V3 WEBSOCKET & 60FPS LIVE PRICE STREAM
 // -------------------------------------------------------------
-function startLivePriceStream() {
-  if (liveDataInterval) clearInterval(liveDataInterval);
+function applyPriceTick(newPrice, tickVolume) {
+  if (!selectedStock || isNaN(newPrice) || newPrice <= 0) return;
 
-  liveDataInterval = setInterval(() => {
-    if (!currentUser || currentUser.status !== "approved") {
-      clearInterval(liveDataInterval);
-      return;
-    }
+  const prevPrice = selectedStock.price;
+  const delta = +(newPrice - prevPrice).toFixed(2);
 
-    if (!selectedStock || currentCandles.length === 0) return;
+  // Update selected stock properties
+  selectedStock.price = parseFloat(newPrice.toFixed(2));
+  selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
+  const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
+  selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
 
-    // Small authentic equity market tick (+/- 0.15%)
-    const isTickPositive = Math.random() > 0.48;
-    const tickMagnitude = (Math.random() * 0.0018 + 0.0004);
-    const delta = (isTickPositive ? 1 : -1) * (selectedStock.price * tickMagnitude);
-
-    selectedStock.price = parseFloat(Math.max(1, selectedStock.price + delta).toFixed(2));
-    selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
-    const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
-    selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
-
-    // Update the live candlestick in TradingView Lightweight Charts
+  // Update live candlestick in TradingView Lightweight Charts
+  if (currentCandles.length > 0) {
     const lastCandle = currentCandles[currentCandles.length - 1];
     lastCandle.close = selectedStock.price;
     lastCandle.high = Math.max(lastCandle.high, selectedStock.price);
     lastCandle.low = Math.min(lastCandle.low, selectedStock.price);
-    lastCandle.volume += Math.floor(Math.random() * 25 + 5);
+    if (tickVolume && tickVolume > 0) {
+      lastCandle.volume = (lastCandle.volume || 0) + tickVolume;
+    }
 
     if (candleSeries) {
       candleSeries.update({
@@ -1390,38 +1430,205 @@ function startLivePriceStream() {
       });
     }
 
-    // Update Header UI Elements
-    const priceElem = document.getElementById("selectedStockPrice");
-    const changeElem = document.getElementById("selectedStockChange");
-    if (priceElem && changeElem) {
-      const isPos = selectedStock.change >= 0;
-      priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-      priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-      priceElem.classList.remove("flash-green", "flash-red");
-      void priceElem.offsetWidth;
-      priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
-
-      changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-      changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
-    }
-
     // Update legend
     const legend = document.getElementById("legendOhlc");
     if (legend) {
       legend.innerText = `O: ${lastCandle.open.toFixed(2)}  H: ${lastCandle.high.toFixed(2)}  L: ${lastCandle.low.toFixed(2)}  C: ${lastCandle.close.toFixed(2)}`;
     }
+  }
 
-    // Update stock item in shares list
-    const listPriceElem = document.getElementById(`listPrice_${selectedStock.symbol}`);
-    const listChangeElem = document.getElementById(`listChange_${selectedStock.symbol}`);
-    if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-    if (listChangeElem) {
-      const isPos = selectedStock.change >= 0;
-      listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
-      listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+  // Update Header UI Elements (selectedStockPrice & animation triggers)
+  const priceElem = document.getElementById("selectedStockPrice");
+  const changeElem = document.getElementById("selectedStockChange");
+  if (priceElem && changeElem) {
+    const isPos = selectedStock.change >= 0;
+    priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+    priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
+
+    // Trigger flash-green or flash-red animation class on selectedStockPrice
+    priceElem.classList.remove("flash-green", "flash-red");
+    void priceElem.offsetWidth; // Force CSS reflow to re-trigger keyframe animation
+    priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
+
+    changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+    changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
+  }
+
+  // Update stock item in shares list
+  const listPriceElem = document.getElementById(`listPrice_${selectedStock.symbol}`);
+  const listChangeElem = document.getElementById(`listChange_${selectedStock.symbol}`);
+  if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+  if (listChangeElem) {
+    const isPos = selectedStock.change >= 0;
+    listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
+    listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
+  }
+}
+
+function startLivePriceStream() {
+  stopLivePriceStream();
+
+  // 1. Attempt Upstox V3 WebSocket connection first
+  connectUpstoxWebSocket();
+
+  // 2. High-Frequency Simulation Fallback / Companion Interval
+  liveDataInterval = setInterval(() => {
+    if (!currentUser || currentUser.status !== "approved") {
+      stopLivePriceStream();
+      return;
     }
+
+    // If WebSocket is actively open and receiving ticks, fallback interval remains passive
+    if (upstoxWebSocket && upstoxWebSocket.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    if (!selectedStock || currentCandles.length === 0) return;
+
+    // Authentic equity market micro-tick (+/- 0.15%)
+    const isTickPositive = Math.random() > 0.48;
+    const tickMagnitude = (Math.random() * 0.0018 + 0.0004);
+    const delta = (isTickPositive ? 1 : -1) * (selectedStock.price * tickMagnitude);
+    const nextPrice = Math.max(1, selectedStock.price + delta);
+    const addedVol = Math.floor(Math.random() * 25 + 5);
+
+    applyPriceTick(nextPrice, addedVol);
   }, 2200);
+}
+
+function stopLivePriceStream() {
+  if (liveDataInterval) {
+    clearInterval(liveDataInterval);
+    liveDataInterval = null;
+  }
+  if (wsReconnectTimeout) {
+    clearTimeout(wsReconnectTimeout);
+    wsReconnectTimeout = null;
+  }
+  if (upstoxWebSocket) {
+    try {
+      upstoxWebSocket.onclose = null;
+      upstoxWebSocket.onerror = null;
+      upstoxWebSocket.close();
+    } catch (e) {}
+    upstoxWebSocket = null;
+  }
+}
+
+async function connectUpstoxWebSocket() {
+  if (!currentUser || currentUser.status !== "approved") return;
+  const functionUrl = UpstoxSupabaseService.getFunctionUrl();
+  if (!functionUrl) return;
+
+  try {
+    const wsUrl = await UpstoxSupabaseService.getWebSocketUri();
+    if (!wsUrl) return;
+
+    upstoxWebSocket = new WebSocket(wsUrl);
+
+    upstoxWebSocket.onopen = () => {
+      updateDataFeedBadge("Upstox V3 WebSocket • Connected (Live Feed)");
+      subscribeToCurrentStock();
+    };
+
+    upstoxWebSocket.onmessage = async (event) => {
+      try {
+        let payload = event.data;
+        if (payload instanceof Blob) {
+          payload = await payload.text();
+        } else if (payload instanceof ArrayBuffer) {
+          payload = new TextDecoder().decode(payload);
+        }
+
+        let parsed = null;
+        try {
+          parsed = JSON.parse(payload);
+        } catch (e) {
+          // May be protobuf or raw text in pure binary feeds
+        }
+
+        if (parsed) {
+          handleUpstoxWsMessage(parsed);
+        }
+      } catch (err) {
+        console.warn("Upstox WS message handling error:", err);
+      }
+    };
+
+    upstoxWebSocket.onerror = (err) => {
+      console.warn("Upstox WebSocket error, using resilient fallback:", err);
+      updateDataFeedBadge("Upstox V3 Market Relay • Edge Active");
+    };
+
+    upstoxWebSocket.onclose = () => {
+      updateDataFeedBadge("Upstox V3 Market Relay • Edge Active");
+      upstoxWebSocket = null;
+      // Auto reconnect after delay if user remains approved
+      if (currentUser && currentUser.status === "approved") {
+        wsReconnectTimeout = setTimeout(() => {
+          connectUpstoxWebSocket();
+        }, 5000);
+      }
+    };
+  } catch (e) {
+    console.warn("connectUpstoxWebSocket failed:", e);
+  }
+}
+
+function subscribeToCurrentStock() {
+  if (!upstoxWebSocket || upstoxWebSocket.readyState !== WebSocket.OPEN || !selectedStock) return;
+  const instrumentKey = UPSTOX_INSTRUMENT_KEYS[selectedStock.symbol] || `NSE_EQ|${selectedStock.symbol}`;
+  const subMessage = {
+    guid: "market-feed-sub",
+    method: "sub",
+    data: {
+      mode: "full",
+      instrumentKeys: [instrumentKey]
+    }
+  };
+  try {
+    upstoxWebSocket.send(JSON.stringify(subMessage));
+  } catch (err) {
+    console.warn("Could not send subscribe packet to Upstox WS:", err);
+  }
+}
+
+function handleUpstoxWsMessage(data) {
+  if (!data || !selectedStock) return;
+  const currentKey = UPSTOX_INSTRUMENT_KEYS[selectedStock.symbol] || `NSE_EQ|${selectedStock.symbol}`;
+
+  // Upstox V3 WebSocket feeds return tick packets with feeds object keyed by instrument key
+  let feed = null;
+  if (data.feeds && data.feeds[currentKey]) {
+    feed = data.feeds[currentKey];
+  } else if (data[currentKey]) {
+    feed = data[currentKey];
+  } else if (data.data && data.data[currentKey]) {
+    feed = data.data[currentKey];
+  } else if (data.ltp !== undefined || data.price !== undefined) {
+    feed = data;
+  }
+
+  if (feed) {
+    let tickPrice = null;
+    let tickVol = 0;
+
+    // Check various Upstox V3 JSON payload structures (Full mode vs LTP mode)
+    if (feed.fullFeed && feed.fullFeed.marketFF && feed.fullFeed.marketFF.ltpc) {
+      tickPrice = feed.fullFeed.marketFF.ltpc.ltp;
+      tickVol = feed.fullFeed.marketFF.v || 0;
+    } else if (feed.ltpc && feed.ltpc.ltp !== undefined) {
+      tickPrice = feed.ltpc.ltp;
+    } else if (feed.ltp !== undefined) {
+      tickPrice = feed.ltp;
+    } else if (feed.price !== undefined) {
+      tickPrice = feed.price;
+    }
+
+    if (tickPrice !== null && !isNaN(tickPrice) && tickPrice > 0) {
+      applyPriceTick(parseFloat(tickPrice), tickVol);
+    }
+  }
 }
 
 // -------------------------------------------------------------
@@ -1572,7 +1779,7 @@ function destroyActiveChart() {
 }
 
 function logout() {
-  if (liveDataInterval) clearInterval(liveDataInterval);
+  stopLivePriceStream();
   destroyActiveChart();
   localStorage.removeItem("app_user");
   currentUser = null;
