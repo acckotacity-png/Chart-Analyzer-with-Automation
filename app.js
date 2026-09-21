@@ -1838,7 +1838,8 @@ function checkPriceAlerts(symbol, currentPrice, prevPrice) {
       showToast(
         `🚨 Price Alert: ${a.symbol}`,
         `वर्तमान मूल्य ₹${currentPrice.toFixed(2)} लक्ष्य ₹${a.threshold.toFixed(2)} के पार (${isAbove ? '≥' : '≤'}) पहुंच चुका है!`,
-        colorType
+        colorType,
+        true
       );
     });
 
@@ -1850,10 +1851,51 @@ function checkPriceAlerts(symbol, currentPrice, prevPrice) {
   }
 }
 
+// Subtle Audio Ping Effect for Real-Time Price Alerts
+function playAlertPingSound(freq = 880, duration = 0.22) {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    
+    // Smooth dual-tone chime: First tone 880Hz (A5), resolving to 1320Hz (E6)
+    const now = ctx.currentTime;
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.08);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.02); // subtle non-intrusive volume
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + duration + 0.05);
+
+    // Auto close audio context after playing
+    setTimeout(() => {
+      try { ctx.close(); } catch (e) {}
+    }, (duration + 0.2) * 1000);
+  } catch (err) {
+    console.debug("AudioContext ping omitted:", err);
+  }
+}
+
 // Non-intrusive Toast Notification Handler
-function showToast(title, message, type = "cyan") {
+function showToast(title, message, type = "cyan", playSound = false) {
   const container = document.getElementById("toastContainer");
   if (!container) return;
+
+  // Play subtle ping audio when requested or on alert hit
+  if (playSound || title.includes("Price Alert")) {
+    playAlertPingSound(type === "green" ? 987.77 : type === "red" ? 740 : 880);
+  }
 
   const toast = document.createElement("div");
   toast.className = `toast-alert ${type === "green" ? "green" : type === "red" ? "red" : ""}`;
