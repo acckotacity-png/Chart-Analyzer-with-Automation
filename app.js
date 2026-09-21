@@ -89,12 +89,69 @@ const STOCKS = [
     signal: "STRONG BUY",
     aiText: "ICICI Bank लगातार नए शिखर छू रहा है। तकनीकी इंडिकेटर सुपर-बुलिश ट्रेंड दर्शाते हैं।",
     chartData: [1065, 1080, 1092, 1100, 1105, 1112, 1118.50]
+  },
+  {
+    symbol: "SBIN",
+    name: "State Bank of India",
+    price: 812.30,
+    change: 9.40,
+    changePercent: 1.17,
+    rsi: 62.1,
+    ema20: 798.50,
+    sma50: 780.00,
+    macd: "Bullish +5.3",
+    signal: "BUY",
+    aiText: "State Bank of India (SBI) अपने ऑल-टाइम हाई लेवल्स के करीब कंसोलिडेट कर रहा है। टारगेट ₹845।",
+    chartData: [780, 788, 795, 792, 804, 808, 812.30]
+  },
+  {
+    symbol: "ITC",
+    name: "ITC Limited",
+    price: 492.15,
+    change: 3.25,
+    changePercent: 0.66,
+    rsi: 54.3,
+    ema20: 488.00,
+    sma50: 482.50,
+    macd: "Neutral +1.2",
+    signal: "HOLD",
+    aiText: "ITC मजबूत डिविडेंड यील्ड और स्थिर वॉल्यूम के साथ साइडवेज़ ट्रेंड दिखा रहा है।",
+    chartData: [482, 485, 487, 484, 490, 489, 492.15]
+  },
+  {
+    symbol: "LT",
+    name: "Larsen & Toubro Ltd",
+    price: 3620.00,
+    change: 45.80,
+    changePercent: 1.28,
+    rsi: 65.5,
+    ema20: 3560.00,
+    sma50: 3510.00,
+    macd: "Bullish +18.4",
+    signal: "BUY",
+    aiText: "इन्फ्रास्ट्रक्चर ऑर्डर बुक मजबूत होने के कारण L&T में निरंतर बाइंग फ्लो जारी है।",
+    chartData: [3510, 3535, 3550, 3575, 3590, 3605, 3620.00]
+  },
+  {
+    symbol: "BHARTIARTL",
+    name: "Bharti Airtel Ltd",
+    price: 1485.60,
+    change: 21.30,
+    changePercent: 1.45,
+    rsi: 68.2,
+    ema20: 1450.00,
+    sma50: 1420.00,
+    macd: "Strong Bullish +9.1",
+    signal: "STRONG BUY",
+    aiText: "टेलीकॉम एआरपीयू बढ़ने की उम्मीद से भारती एयरटेल मजबूत अपट्रेंड में ट्रेड कर रहा है।",
+    chartData: [1420, 1435, 1448, 1460, 1472, 1475, 1485.60]
   }
 ];
 
 let selectedStock = STOCKS[0];
 let stockChartInstance = null;
 let liveDataInterval = null;
+let currentStockSearchQuery = "";
 
 // Initialize on load
 window.addEventListener("DOMContentLoaded", () => {
@@ -261,13 +318,48 @@ function initDashboardShares() {
   startLivePriceStream();
 }
 
+function handleStockSearch(query) {
+  currentStockSearchQuery = (query || "").trim().toLowerCase();
+  const clearBtn = document.getElementById("clearStockSearchBtn");
+  if (clearBtn) {
+    clearBtn.classList.toggle("hidden", currentStockSearchQuery.length === 0);
+  }
+  renderSharesList();
+}
+
+function clearStockSearch() {
+  const input = document.getElementById("stockSearchInput");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  handleStockSearch("");
+}
+
 function renderSharesList() {
   if (!currentUser || currentUser.status !== "approved") return;
   const container = document.getElementById("stocksListContainer");
   if (!container) return;
   container.innerHTML = "";
 
-  STOCKS.forEach(stock => {
+  const filteredStocks = STOCKS.filter(stock => {
+    if (!currentStockSearchQuery) return true;
+    const matchSymbol = stock.symbol.toLowerCase().includes(currentStockSearchQuery);
+    const matchName = stock.name.toLowerCase().includes(currentStockSearchQuery);
+    return matchSymbol || matchName;
+  });
+
+  if (filteredStocks.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 13px;">
+        <i class="fa-solid fa-circle-exclamation" style="font-size: 24px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
+        <span>No stocks found matching "<b>${currentStockSearchQuery}</b>"</span>
+      </div>
+    `;
+    return;
+  }
+
+  filteredStocks.forEach(stock => {
     const isPositive = stock.change >= 0;
     const isSelected = stock.symbol === selectedStock.symbol;
 
@@ -281,7 +373,7 @@ function renderSharesList() {
         <span class="stock-price">₹${stock.price.toFixed(2)}</span>
       </div>
       <div class="stock-row-sub">
-        <span>${stock.name.substring(0, 20)}</span>
+        <span>${stock.name.substring(0, 22)}</span>
         <span class="stock-change ${isPositive ? 'positive' : 'negative'}">
           ${isPositive ? '+' : ''}${stock.change.toFixed(2)} (${isPositive ? '+' : ''}${stock.changePercent}%)
         </span>

@@ -116,6 +116,50 @@
     .action-btn-group { display: flex; gap: 6px; }
     .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; font-weight: 700; border: none; }
 
+    /* Stock Search Bar */
+    .stock-search-wrap {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .stock-search-input {
+      width: 100%;
+      padding: 9px 12px 9px 34px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .stock-search-input:focus {
+      border-color: var(--cyan);
+    }
+    .stock-search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .stock-search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 4px;
+    }
+    .stock-search-clear:hover {
+      color: var(--text);
+    }
+
     /* Shares Stock List & Interactive Chart */
     .dashboard-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
     @media (max-width: 850px) {
@@ -303,7 +347,30 @@
             <h2 style="font-size: 15px; margin-bottom: 0;"><i class="fa-solid fa-list-check"></i> Indian Shares (NSE)</h2>
             <span style="font-size: 11px; color: var(--green); font-weight: 700;">LIVE</span>
           </div>
-          <p style="font-size: 11px; margin-bottom: 12px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
+          <p style="font-size: 11px; margin-bottom: 10px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
+          
+          <!-- Search input for Indian Shares -->
+          <div class="stock-search-wrap">
+            <i class="fa-solid fa-magnifying-glass stock-search-icon"></i>
+            <input 
+              type="text" 
+              id="stockSearchInput" 
+              class="stock-search-input" 
+              placeholder="Search symbol or company (e.g. RELIANCE, TCS)..." 
+              autocomplete="off"
+              oninput="handleStockSearch(this.value)"
+            >
+            <button 
+              type="button" 
+              id="clearStockSearchBtn" 
+              class="stock-search-clear hidden" 
+              onclick="clearStockSearch()"
+              title="Clear search"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
           <div class="stocks-list" id="stocksListContainer">
             <!-- Populated via JavaScript -->
           </div>
