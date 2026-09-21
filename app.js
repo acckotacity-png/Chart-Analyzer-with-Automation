@@ -819,6 +819,7 @@ function initLightweightChart() {
         width: container.clientWidth,
         height: container.clientHeight || 440
       });
+      ChartDrawingEngine.resizeCanvas();
     }
   });
 
@@ -840,6 +841,494 @@ function initLightweightChart() {
       legend.innerText = `O: ${ohlc.open.toFixed(2)}  H: ${ohlc.high.toFixed(2)}  L: ${ohlc.low.toFixed(2)}  C: ${ohlc.close.toFixed(2)}`;
     }
   });
+
+  // Initialize interactive drawing overlay canvas on top of chart
+  ChartDrawingEngine.init();
+}
+
+// -------------------------------------------------------------
+// INTERACTIVE CHART DRAWING ENGINE (TRENDLINES, S/R, RAYS)
+// -------------------------------------------------------------
+const ChartDrawingEngine = {
+  canvas: null,
+  ctx: null,
+  isEnabled: false,
+  activeTool: "trendline", // 'trendline', 'support', 'resistance', 'ray'
+  isDrawing: false,
+  startPoint: null,
+  currentPoint: null,
+  drawings: [], // array of drawn shapes: { type, start: {x,y}, end: {x,y}, color, lineWidth }
+
+  init() {
+    this.canvas = document.getElementById("chartDrawingCanvas");
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext("2d");
+    this.resizeCanvas();
+
+    // Bind event listeners only once
+    if (!this._bound) {
+      this._bound = true;
+
+      this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
+      this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
+      this.canvas.addEventListener("mouseup", (e) => this.handleMouseUp(e));
+      this.canvas.addEventListener("mouseleave", () => this.handleMouseLeave());
+
+      // Touch events for mobile/tablet support
+      this.canvas.addEventListener("touchstart", (e) => {
+        if (!this.isEnabled) return;
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => e.preventDefault() });
+      }, { passive: false });
+
+      this.canvas.addEventListener("touchmove", (e) => {
+        if (!this.isEnabled) return;
+        const touch = e.touches[0];
+        this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => e.preventDefault() });
+      }, { passive: false });
+
+      this.canvas.addEventListener("touchend", () => {
+        if (!this.isEnabled) return;
+        this.handleMouseUp();
+      });
+    }
+
+    this.render();
+  },
+
+  resizeCanvas() {
+    const wrapper = document.getElementById("chartContainerWrapper");
+    if (!this.canvas || !wrapper) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.canvas.style.width = `${rect.width}px`;
+    this.canvas.style.height = `${rect.height}px`;
+
+    if (this.ctx) {
+      this.ctx.scale(dpr, dpr);
+    }
+    this.render();
+  },
+
+  getCanvasCoordinates(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  },
+
+  handleMouseDown(e) {
+    if (!this.isEnabled) return;
+    if (e.preventDefault) e.preventDefault();
+    const pt = this.getCanvasCoordinates(e);
+
+    if (this.activeTool === "support" || this.activeTool === "resistance") {
+      // Single-click horizontal line across the entire chart width
+      const color = this.activeTool === "support" ? "#00e676" : "#ff3d71";
+      const label = this.activeTool === "support" ? "Support" : "Resistance";
+      this.drawings.push({
+        type: "horizontal",
+        y: pt.y,
+        color: color,
+        label: label,
+        lineWidth: 2
+      });
+      this.updateCountBadge();
+      this.render();
+      return;
+    }
+
+    // Two-point tools (trendline, ray)
+    this.isDrawing = true;
+    this.startPoint = pt;
+    this.currentPoint = pt;
+    this.render();
+  },
+
+  handleMouseMove(e) {
+    if (!this.isEnabled) return;
+    const pt = this.getCanvasCoordinates(e);
+
+    if (this.isDrawing) {
+      if (e.preventDefault) e.preventDefault();
+      this.currentPoint = pt;
+      this.render();
+    }
+  },
+
+  handleMouseUp(e) {
+    if (!this.isEnabled || !this.isDrawing) return;
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (this.startPoint && this.currentPoint) {
+      const dx = this.currentPoint.x - this.startPoint.x;
+      const dy = this.currentPoint.y - this.startPoint.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Only save if line is at least 6 pixels long
+      if (dist >= 6) {
+        const color = this.activeTool === "ray" ? "#a855f7" : "#00e5ff";
+        this.drawings.push({
+          type: this.activeTool,
+          start: { x: this.startPoint.x, y: this.startPoint.y },
+          end: { x: this.currentPoint.x, y: this.currentPoint.y },
+          color: color,
+          lineWidth: 2
+        });
+        this.updateCountBadge();
+      }
+    }
+
+    this.isDrawing = false;
+    this.startPoint = null;
+    this.currentPoint = null;
+    this.render();
+  },
+
+  handleMouseLeave() {
+    if (this.isDrawing) {
+      this.handleMouseUp();
+    }
+  },
+
+  render() {
+    if (!this.ctx || !this.canvas) return;
+    const wrapper = document.getElementById("chartContainerWrapper");
+    if (!wrapper) return;
+    const w = wrapper.clientWidth;
+    const h = wrapper.clientHeight;
+
+    this.ctx.clearRect(0, 0, w, h);
+
+    // Draw saved trendlines & S/R lines
+    this.drawings.forEach((d) => {
+      this.drawShape(d, w, h);
+    });
+
+    // Draw active in-progress preview line
+    if (this.isDrawing && this.startPoint && this.currentPoint) {
+      const previewShape = {
+        type: this.activeTool,
+        start: this.startPoint,
+        end: this.currentPoint,
+        color: this.activeTool === "ray" ? "#a855f7" : "#00e5ff",
+        lineWidth: 2,
+        isPreview: true
+      };
+      this.drawShape(previewShape, w, h);
+    }
+  },
+
+  drawShape(d, w, h) {
+    const ctx = this.ctx;
+    ctx.save();
+
+    if (d.type === "horizontal") {
+      // Horizontal Support/Resistance Level Line
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      ctx.setLineDash([6, 4]);
+      ctx.moveTo(0, d.y);
+      ctx.lineTo(w, d.y);
+      ctx.stroke();
+
+      // Label on right price scale
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "left";
+      ctx.fillRect(8, d.y - 9, ctx.measureText(d.label).width + 8, 16);
+      ctx.fillStyle = "#0c121e";
+      ctx.fillText(d.label, 12, d.y + 3);
+    } else if (d.type === "trendline") {
+      // Trendline Segment
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      if (d.isPreview) {
+        ctx.setLineDash([4, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.moveTo(d.start.x, d.start.y);
+      ctx.lineTo(d.end.x, d.end.y);
+      ctx.stroke();
+
+      // Terminal anchor dots
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(d.start.x, d.start.y, 4, 0, Math.PI * 2);
+      ctx.arc(d.end.x, d.end.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.type === "ray") {
+      // Extended Ray
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      if (d.isPreview) ctx.setLineDash([4, 4]);
+      else ctx.setLineDash([]);
+
+      const dx = d.end.x - d.start.x;
+      const dy = d.end.y - d.start.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      let targetX = d.end.x;
+      let targetY = d.end.y;
+
+      if (len > 0) {
+        // Project forward across the canvas
+        const factor = Math.max(w, h) / len;
+        targetX = d.start.x + dx * factor;
+        targetY = d.start.y + dy * factor;
+      }
+
+      ctx.moveTo(d.start.x, d.start.y);
+      ctx.lineTo(targetX, targetY);
+      ctx.stroke();
+
+      // Start anchor
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(d.start.x, d.start.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  },
+
+  updateCountBadge() {
+    const badge = document.getElementById("dtDrawingsCount");
+    if (badge) badge.innerText = this.drawings.length;
+  },
+
+  clear() {
+    this.drawings = [];
+    this.isDrawing = false;
+    this.startPoint = null;
+    this.currentPoint = null;
+    this.updateCountBadge();
+    this.render();
+  }
+};
+
+function toggleDrawingMode() {
+  ChartDrawingEngine.isEnabled = !ChartDrawingEngine.isEnabled;
+  const isEnabled = ChartDrawingEngine.isEnabled;
+
+  const canvas = document.getElementById("chartDrawingCanvas");
+  if (canvas) {
+    canvas.classList.toggle("drawing-active", isEnabled);
+  }
+
+  // Synchronize toolbar toggles
+  const btnToggle = document.getElementById("dtBtnToggle");
+  const toggleText = document.getElementById("dtToggleText");
+  const mainBtn = document.getElementById("btnDrawingToolsToggle");
+  const tip = document.getElementById("dtHelpTip");
+
+  if (btnToggle) btnToggle.classList.toggle("active", isEnabled);
+  if (toggleText) toggleText.innerText = isEnabled ? "Drawing: ON" : "Enable Drawing";
+  if (mainBtn) {
+    mainBtn.classList.toggle("active", isEnabled);
+    mainBtn.style.color = isEnabled ? "var(--cyan)" : "";
+    mainBtn.style.background = isEnabled ? "rgba(0, 229, 255, 0.15)" : "";
+  }
+
+  if (tip) {
+    if (isEnabled) {
+      tip.innerHTML = `<b style="color:var(--cyan)">Drawing Active</b>: Click and drag on chart to plot trendlines/levels`;
+    } else {
+      tip.innerText = `Click 'Enable Drawing' to manually plot trendlines/levels`;
+    }
+  }
+
+  // Ensure canvas is properly sized and rendered
+  ChartDrawingEngine.resizeCanvas();
+}
+
+function setDrawingTool(tool) {
+  ChartDrawingEngine.activeTool = tool;
+
+  // Automatically enable drawing mode if user picks a tool
+  if (!ChartDrawingEngine.isEnabled) {
+    toggleDrawingMode();
+  }
+
+  const buttons = {
+    trendline: document.getElementById("dtBtnTrendline"),
+    support: document.getElementById("dtBtnSupport"),
+    resistance: document.getElementById("dtBtnResistance"),
+    ray: document.getElementById("dtBtnRay")
+  };
+
+  Object.keys(buttons).forEach(k => {
+    if (buttons[k]) buttons[k].classList.toggle("active", k === tool);
+  });
+
+  const tip = document.getElementById("dtHelpTip");
+  if (tip) {
+    if (tool === "support") tip.innerText = "Click anywhere on the chart to set horizontal Support (Green)";
+    else if (tool === "resistance") tip.innerText = "Click anywhere on the chart to set horizontal Resistance (Red)";
+    else if (tool === "ray") tip.innerText = "Click start point, drag, and release to project a Ray trendline";
+    else tip.innerText = "Click start point, drag to end point, and release to plot Trendline";
+  }
+}
+
+function clearAllChartDrawings() {
+  ChartDrawingEngine.clear();
+}
+
+/**
+ * Export to PNG: Composite Lightweight Chart canvas + User Drawings overlay canvas + Header info
+ * Saves a high-resolution PNG image directly to user's downloads
+ */
+async function exportChartWithDrawingsToPng() {
+  const wrapper = document.getElementById("chartContainerWrapper");
+  if (!wrapper) return;
+
+  const btn = document.getElementById("dtBtnExportPng");
+  const originalHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Exporting...`;
+    btn.disabled = true;
+  }
+
+  try {
+    const dpr = window.devicePixelRatio || 1;
+    const width = wrapper.clientWidth;
+    const height = wrapper.clientHeight;
+
+    // Create offscreen export canvas
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = width * dpr;
+    exportCanvas.height = height * dpr;
+    const ctx = exportCanvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    // 1. Draw solid dark chart background
+    ctx.fillStyle = "#0c121e";
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Extract Lightweight Chart canvas / takeScreenshot
+    let lwImageDrawn = false;
+    if (lwChart && typeof lwChart.takeScreenshot === "function") {
+      try {
+        const screenshotCanvas = lwChart.takeScreenshot();
+        if (screenshotCanvas) {
+          ctx.drawImage(screenshotCanvas, 0, 0, width, height);
+          lwImageDrawn = true;
+        }
+      } catch (err) {
+        console.warn("lwChart.takeScreenshot failed, falling back to DOM canvas grab:", err);
+      }
+    }
+
+    if (!lwImageDrawn) {
+      // Direct DOM canvas capture of Lightweight Charts internal canvases
+      const lwCanvases = wrapper.querySelectorAll("#lightweight_chart_container canvas");
+      if (lwCanvases && lwCanvases.length > 0) {
+        lwCanvases.forEach(c => {
+          try {
+            ctx.drawImage(c, 0, 0, width, height);
+            lwImageDrawn = true;
+          } catch (e) {
+            console.warn("Could not draw internal canvas:", e);
+          }
+        });
+      }
+    }
+
+    // 3. Composite user drawings from chartDrawingCanvas
+    const drawingCanvas = document.getElementById("chartDrawingCanvas");
+    if (drawingCanvas) {
+      try {
+        ctx.drawImage(drawingCanvas, 0, 0, width, height);
+      } catch (e) {
+        console.warn("Could not composite drawing canvas:", e);
+      }
+    }
+
+    // 4. Render decorative watermark / stock symbol info badge at top
+    const symbol = selectedStock ? selectedStock.symbol : "NSE_EQUITY";
+    const priceStr = selectedStock ? `₹${selectedStock.price.toFixed(2)}` : "";
+    const changeStr = selectedStock ? `${selectedStock.change >= 0 ? '+' : ''}${selectedStock.change.toFixed(2)} (${selectedStock.changePercent}%)` : "";
+    const changeColor = (selectedStock && selectedStock.change >= 0) ? "#00e676" : "#ff3d71";
+
+    ctx.save();
+    // Header box background
+    ctx.fillStyle = "rgba(12, 18, 30, 0.88)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(14, 12, 340, 52, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text: Stock Symbol
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(symbol, 24, 34);
+
+    // Text: Interval & Exchange tag
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#00e5ff";
+    ctx.fillText("1D • NSE", 120, 34);
+
+    // Text: Live Price and Net Change
+    ctx.font = "bold 13px monospace";
+    ctx.fillStyle = changeColor;
+    ctx.fillText(`${priceStr}  ${changeStr}`, 24, 54);
+
+    // Bottom Watermark
+    ctx.font = "10px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.textAlign = "right";
+    const dateStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    ctx.fillText(`Upstox V3 Live • ${dateStr} IST`, width - 16, height - 12);
+    ctx.restore();
+
+    // 5. Convert to Blob & trigger browser download
+    exportCanvas.toBlob((blob) => {
+      if (!blob) {
+        alert("Failed to generate image file.");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.createElement("a");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      downloadLink.download = `${symbol}_Analysis_${timestamp}.png`;
+      downloadLink.href = url;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      const tip = document.getElementById("dtHelpTip");
+      if (tip) {
+        tip.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-check"></i> Chart exported to ${symbol}_Analysis_${timestamp}.png</span>`;
+        setTimeout(() => {
+          if (tip) tip.innerText = "Click on the chart to start plotting";
+        }, 4000);
+      }
+    }, "image/png");
+
+  } catch (err) {
+    console.error("Export to PNG error:", err);
+    alert("Export to PNG failed: " + err.message);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  }
 }
 
 // -------------------------------------------------------------

@@ -254,6 +254,62 @@
     .latency-warn { color: var(--amber) !important; }
     .latency-bad { color: var(--red) !important; }
 
+    /* Interactive Drawing Tools Bar & Chart Canvas Overlay */
+    .drawing-toolbar-container {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(18, 26, 44, 0.95);
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+    }
+    .drawing-tool-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .drawing-tool-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(0, 229, 255, 0.08);
+    }
+    .drawing-tool-btn.active {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+    }
+    .chart-drawing-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 15;
+      pointer-events: none;
+      cursor: default;
+    }
+    .chart-drawing-canvas.drawing-active {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+    .drawing-badge-active {
+      background: rgba(0, 229, 255, 0.15) !important;
+      border-color: var(--cyan) !important;
+      color: var(--cyan) !important;
+    }
+
     .stocks-list { display: flex; flex-direction: column; gap: 8px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
     .stock-item {
       background: var(--card-elevated);
@@ -679,6 +735,35 @@
               <span class="debug-stat-sub" id="dbgTicksReceived">0 ticks evaluated</span>
             </div>
           </div>
+
+          <!-- Drawing Tools Bar embedded in Debug Panel -->
+          <div class="drawing-toolbar-container" id="drawingToolbarStrip">
+            <span style="font-size: 11px; font-weight: 800; color: var(--cyan); display: flex; align-items: center; gap: 5px; margin-right: 4px;">
+              <i class="fa-solid fa-pen-ruler"></i> Chart Drawing Tools:
+            </span>
+            <button class="drawing-tool-btn" id="dtBtnToggle" onclick="toggleDrawingMode()" title="Enable or Disable Chart Drawing Mode">
+              <i class="fa-solid fa-draw-polygon"></i> <span id="dtToggleText">Enable Drawing</span>
+            </button>
+            <button class="drawing-tool-btn active" id="dtBtnTrendline" onclick="setDrawingTool('trendline')" title="Draw Diagonal Trendline (Click start & end point)">
+              <i class="fa-solid fa-chart-line"></i> Trendline
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnSupport" onclick="setDrawingTool('support')" title="Plot Horizontal Support Line (Green)">
+              <i class="fa-solid fa-grip-lines"></i> Support (Green)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnResistance" onclick="setDrawingTool('resistance')" title="Plot Horizontal Resistance Line (Red)">
+              <i class="fa-solid fa-grip-lines"></i> Resistance (Red)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnRay" onclick="setDrawingTool('ray')" title="Draw Ray Line extending forward">
+              <i class="fa-solid fa-arrow-trend-up"></i> Ray
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnClear" onclick="clearAllChartDrawings()" style="border-color: rgba(255, 61, 113, 0.4); color: var(--red);" title="Clear all user-drawn trendlines and levels">
+              <i class="fa-solid fa-trash-can"></i> Clear All (<span id="dtDrawingsCount">0</span>)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnExportPng" onclick="exportChartWithDrawingsToPng()" style="border-color: var(--green); color: var(--green); background: rgba(0, 230, 118, 0.08);" title="Save and download the current chart with trendlines and analysis as a high-resolution PNG image">
+              <i class="fa-solid fa-camera"></i> Export to PNG
+            </button>
+            <span id="dtHelpTip" style="font-size: 10px; color: var(--text-muted); margin-left: auto;">Click on the chart to start plotting</span>
+          </div>
         </div>
 
         <!-- LEFT: SHARES LIST -->
@@ -793,6 +878,9 @@
               <button class="tab-btn" id="btnLatencyDebug" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleLatencyDebugPanel()" title="Toggle WebSocket & System Latency Diagnostics Panel">
                 <i class="fa-solid fa-stopwatch"></i> Latency Debug
               </button>
+              <button class="tab-btn" id="btnDrawingToolsToggle" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleDrawingMode()" title="Toggle Manual Chart Trendline & S/R Drawing Mode">
+                <i class="fa-solid fa-pen-ruler"></i> Drawing Tools
+              </button>
               <button class="tab-btn" id="btnSetAlert" style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Set Real-Time Price Alert for Selected Stock">
                 <i class="fa-solid fa-bell"></i> Set Alert
               </button>
@@ -807,6 +895,9 @@
             <div id="lightweight_chart_container" style="height: 100%; width: 100%;"></div>
             <div id="official_tv_container" class="hidden" style="height: 100%; width: 100%; background: #0c121e;"></div>
             
+            <!-- Interactive User Drawing Canvas Overlay (Trendlines, S/R, Rays) -->
+            <canvas id="chartDrawingCanvas" class="chart-drawing-canvas"></canvas>
+
             <!-- Real-Time Crosshair & OHLC Legend Overlay -->
             <div id="chartLegend" style="position: absolute; top: 12px; left: 14px; z-index: 10; font-size: 11px; pointer-events: none; color: var(--text-muted); background: rgba(12, 18, 30, 0.85); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
               <span id="legendSymbol" style="font-weight: 800; color: var(--text);">RELIANCE</span>
