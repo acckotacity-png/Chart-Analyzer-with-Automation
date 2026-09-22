@@ -1,0 +1,35 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const {stripTypeScriptTypes}=require('node:module');
+const Core=require('../trading-core.js');const ExcelJS=require('../vendor/exceljs.min.js');
+const json=(x,status=200)=>new Response(JSON.stringify(x),{status});
+function edge(options={}){
+ const calls=[];const fetch=async(url,init)=>{calls.push(url);
+ if(url.endsWith('/auth/v1/user'))return json({id:'test'});
+ if(url.endsWith('/rpc/has_active_access'))return json(options.access!==false);
+ if(url.includes('/market/status/'))return options.statusError?json({},503):json({status:'success',data:{status:options.market||'NORMAL_OPEN'}});
+ if(url.includes('NSE.json.gz'))return json([{segment:'NSE_EQ',instrument_type:'EQ',trading_symbol:'TCS',instrument_key:'NSE_EQ|test'}]);
+ if(options.upstreamError)return json({},401);
+ if(url.includes('/market-quote/quotes'))return json({status:'success',data:{'NSE_EQ:TCS':{instrument_token:'NSE_EQ|test',last_price:102,last_trade_time:String(Date.now()),net_change:2}}});
+ if(url.includes('/intraday/'))return json({status:'success',data:{candles:[['2026-09-21T09:20:00+05:30',101,103,100,102,200],['2026-09-21T09:15:00+05:30',100,102,99,101,100]]}});
+ return json({status:'success',data:{candles:[['2026-09-18T09:15:00+05:30',99,101,98,100,300]]}});
+ };
+ const ctx={Response,Request,URL,AbortSignal,Blob,Uint8Array,DecompressionStream,TextDecoder,console,fetch,Deno:{env:{get:k=>({SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'anon',UPSTOX_ACCESS_TOKEN:options.token===false?'':'token'}[k])},serve:fn=>ctx.handler=fn}};
+ vm.runInNewContext(stripTypeScriptTypes(fs.readFileSync('supabase/functions/upstox-market-data/index.ts','utf8')),ctx);
+ return {handler:ctx.handler,calls};
+}
+const request=(body={},auth=true)=>new Request('https://example.test',{method:'POST',headers:auth?{Authorization:'Bearer test'}:{},body:JSON.stringify(body)});
+test('anonymous requests never reach broker',async()=>{const e=edge();assert.equal((await e.handler(request({},false))).status,401);assert.equal(e.calls.length,0);});
+test('expired or revoked plan is blocked server-side',async()=>{const e=edge({access:false});assert.equal((await e.handler(request())).status,403);assert.equal(e.calls.length,2);});
+test('missing token gives error, not fabricated prices',async()=>{const e=edge({token:false});const r=await e.handler(request({symbol:'TCS'}));assert.equal(r.status,503);assert.equal((await r.json()).candles,undefined);});
+test('market closed: background refresh never requests quotes or candles',async()=>{const e=edge({market:'NORMAL_CLOSE'});const data=await(await e.handler(request({symbol:'TCS',refresh:true}))).json();assert.equal(data.paused,true);assert.equal(data.market.isOpen,false);assert.equal(e.calls.length,3);});
+test('unknown market status freezes background updates',async()=>{const e=edge({statusError:true});const data=await(await e.handler(request({symbol:'TCS',refresh:true}))).json();assert.equal(data.market.status,'UNKNOWN');assert.equal(data.paused,true);});
+test('weekend/holiday manual view returns real last-price snapshot',async()=>{const e=edge({market:'NORMAL_CLOSE'});const data=await(await e.handler(request({symbol:'TCS',timeframe:'5m'}))).json();assert.equal(data.quote.price,102);assert.equal(data.market.isOpen,false);assert.equal(data.candles.length,3);assert.ok(data.candles[0].time<data.candles[2].time);});
+test('daily candle is aggregated from broker intraday OHLCV',async()=>{const e=edge();const data=await(await e.handler(request({symbol:'TCS',timeframe:'1D'}))).json();assert.deepEqual(data.candles[1],{time:'2026-09-21',open:100,high:103,low:99,close:102,volume:300});assert.ok(e.calls.some(x=>x.includes('/days/1/')));});
+test('upstream failure never falls back to synthetic data',async()=>{const e=edge({upstreamError:true});assert.equal((await e.handler(request({symbol:'TCS'}))).status,502);});
+test('unsupported symbols and actions are rejected',async()=>{const e=edge();assert.equal((await e.handler(request({symbol:'UNKNOWN'}))).status,502);assert.equal((await e.handler(request({action:'get_ws_url'}))).status,400);});
+test('expiry boundary and admin status are enforced',()=>{const now=Date.now();assert.equal(Core.active({status:'approved',access_until:new Date(now).toISOString()},now),false);assert.equal(Core.active({status:'approved',access_until:new Date(now+1).toISOString()},now),true);assert.equal(Core.active({status:'rejected',role:'admin'},now),false);});
+const rows=[{id:'1',trade_date:'2026-09-18',created_at:'2026-09-18T10:00:00Z',exchange:'NSE',symbol:'TCS',side:'BUY',quantity:10,price:100,fees:10,notes:'=HYPERLINK("https://invalid.test")'},{id:'2',trade_date:'2026-09-21',created_at:'2026-09-21T10:00:00Z',exchange:'NSE',symbol:'TCS',side:'SELL',quantity:4,price:120,fees:4,notes:'sale'}];
+test('weighted-average realized P&L includes fees',()=>{const p=Core.positions(rows)[0];assert.equal(p.quantity,6);assert.equal(p.cost,606);assert.equal(p.average,101);assert.equal(p.realized,72);});
+test('unmatched sells suppress misleading profit',()=>{const p=Core.positions([rows[1]])[0];assert.equal(p.realized,null);assert.equal(p.cost,null);assert.equal(p.unmatched,true);});
+test('Excel file round-trips numbers, formulas, dates and safe text',async()=>{const wb=Core.workbook(ExcelJS,rows);const data=await wb.xlsx.writeBuffer();const loaded=new ExcelJS.Workbook();await loaded.xlsx.load(data);const trades=loaded.getWorksheet('Trades');assert.equal(trades.getCell('F2').value,10);assert.equal(trades.getCell('I2').value.formula,'F2*G2');assert.equal(trades.getCell('J3').value.result,476);assert.equal(trades.getCell('K2').value,rows[0].notes);assert.equal(trades.getCell('K2').type,ExcelJS.ValueType.String);assert.equal(loaded.getWorksheet('Summary').getCell('F5').value,72);});
+test('deployed assets match source',()=>{for(const name of ['app.js','index.html','config.js','features.js','trading-core.js'])assert.equal(fs.readFileSync('public/'+name,'utf8'),fs.readFileSync(name,'utf8'));});

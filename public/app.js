@@ -1,266 +1,141 @@
-// Supabase Credentials
-const SUPABASE_URL = "https://qhqbporwncgccpcgrurl.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocWJwb3J3bmNnY2NwY2dydXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NjMxOTIsImV4cCI6MjEwNTUzOTE5Mn0.o0EgKYIv0JQSxJJftgIpZwFA49br7tgTNdSkSmgYwMs";
+// Supabase configuration is shared by authentication and the data bridge.
+const SUPABASE_URL = (window.APP_CONFIG?.supabaseUrl || "").replace(/\/$/, "");
+const SUPABASE_ANON = window.APP_CONFIG?.supabaseAnonKey || "";
+const authClient = SUPABASE_URL && SUPABASE_ANON && window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+let currentUser = null;
+localStorage.removeItem("app_user"); // Never trust legacy cached roles or approval status.
+function readStoredJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+async function sessionToken() {
+  if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+  const { data, error } = await authClient.auth.getSession();
+  if (error || !data.session) throw new Error("Please sign in again.");
+  return data.session.access_token;
+}
 
-let currentUser = JSON.parse(localStorage.getItem("app_user") || "null");
-
-// Indian Stock Data & Indicators
+// Symbol directory only. Prices come exclusively from authenticated broker responses.
 const STOCKS = [
   {
-    symbol: "RELIANCE",
-    tvSymbol: "NSE:RELIANCE",
-    name: "Reliance Industries Ltd",
-    price: 1240.30,
-    change: 14.80,
-    changePercent: 1.21,
-    rsi: 62.4,
-    ema20: 1224.50,
-    sma50: 1210.00,
-    macd: "Bullish +4.2",
-    signal: "BUY",
-    aiText: "Reliance Industries (पोस्ट-बोनस 1:1) ₹1,240.30 के स्तर पर स्ट्रॉन्ग कंसोलिडेशन के बाद अपट्रेंड में है। 20 EMA (₹1,224.50) पर मजबूत सपोर्ट है। स्टॉपलॉस ₹1,215 के साथ बुलिश मोमेंटम एक्टिव है।",
-    chartData: [1210, 1218, 1225, 1220, 1232, 1236, 1240.30]
+    "symbol": "RELIANCE",
+    "name": "Reliance Industries Ltd",
+    "tvSymbol": "NSE:RELIANCE"
   },
   {
-    symbol: "TCS",
-    tvSymbol: "NSE:TCS",
-    name: "Tata Consultancy Services",
-    price: 4125.00,
-    change: -18.50,
-    changePercent: -0.45,
-    rsi: 52.8,
-    ema20: 4140.00,
-    sma50: 4110.00,
-    macd: "Neutral 0.8",
-    signal: "HOLD",
-    aiText: "TCS इस समय 50 SMA और 20 EMA के बीच कंसोलिडेशन मोड में है। फ्रेश ब्रेकआउट के लिए ₹4,160 का इंतज़ार करें।",
-    chartData: [4160, 4150, 4135, 4145, 4115, 4130, 4125.00]
+    "symbol": "BHARTIARTL",
+    "name": "Bharti Airtel Ltd",
+    "tvSymbol": "NSE:BHARTIARTL"
   },
   {
-    symbol: "TATAMOTORS",
-    tvSymbol: "NSE:TATAMOTORS",
-    name: "Tata Motors Ltd",
-    price: 978.60,
-    change: 24.80,
-    changePercent: 2.60,
-    rsi: 71.4,
-    ema20: 945.20,
-    sma50: 920.00,
-    macd: "Strong Bullish +8.5",
-    signal: "STRONG BUY",
-    aiText: "Tata Motors में भारी वॉल्यूम के साथ 52-वीक हाई की तरफ मूवमेंट देखा जा रहा है। लक्ष्य ₹1,020 संभावित है।",
-    chartData: [920, 935, 942, 955, 960, 968, 978.60]
+    "symbol": "HDFCBANK",
+    "name": "HDFC Bank Ltd",
+    "tvSymbol": "NSE:HDFCBANK"
   },
   {
-    symbol: "TATASTEEL",
-    tvSymbol: "NSE:TATASTEEL",
-    name: "Tata Steel Ltd",
-    price: 154.20,
-    change: 2.35,
-    changePercent: 1.55,
-    rsi: 59.2,
-    ema20: 151.80,
-    sma50: 148.50,
-    macd: "Bullish +1.4",
-    signal: "BUY",
-    aiText: "मेटल सेक्टर में उछाल से Tata Steel अपने प्रमुख सपोर्ट स्तरों से ऊपर मजबूत स्थिति में है।",
-    chartData: [148, 150, 149, 152, 153, 154.20]
+    "symbol": "ICICIBANK",
+    "name": "ICICI Bank Ltd",
+    "tvSymbol": "NSE:ICICIBANK"
   },
   {
-    symbol: "INFY",
-    tvSymbol: "NSE:INFY",
-    name: "Infosys Ltd",
-    price: 1540.25,
-    change: 12.30,
-    changePercent: 0.81,
-    rsi: 58.6,
-    ema20: 1520.00,
-    sma50: 1505.00,
-    macd: "Bullish +4.2",
-    signal: "BUY",
-    aiText: "Infosys 200 DMA के ऊपर सस्टेन कर रहा है। RSI 58.6 स्थिर बढ़त का संकेत दे रहा है।",
-    chartData: [1500, 1512, 1518, 1530, 1525, 1535, 1540.25]
+    "symbol": "SBIN",
+    "name": "State Bank of India",
+    "tvSymbol": "NSE:SBIN"
   },
   {
-    symbol: "HDFCBANK",
-    tvSymbol: "NSE:HDFCBANK",
-    name: "HDFC Bank Ltd",
-    price: 1640.20,
-    change: 8.50,
-    changePercent: 0.52,
-    rsi: 56.4,
-    ema20: 1625.00,
-    sma50: 1612.00,
-    macd: "Bullish +3.1",
-    signal: "BUY",
-    aiText: "बैंकिंग सेक्टर में खरीदारी से HDFC Bank में अच्छा सपोर्ट बन चुका है। ₹1,610 का स्टॉपलॉस रखें।",
-    chartData: [1610, 1615, 1622, 1628, 1635, 1632, 1640.20]
+    "symbol": "TCS",
+    "name": "Tata Consultancy Services",
+    "tvSymbol": "NSE:TCS"
   },
   {
-    symbol: "ICICIBANK",
-    tvSymbol: "NSE:ICICIBANK",
-    name: "ICICI Bank Ltd",
-    price: 1118.50,
-    change: 14.20,
-    changePercent: 1.29,
-    rsi: 66.8,
-    ema20: 1095.00,
-    sma50: 1070.00,
-    macd: "Bullish +6.8",
-    signal: "STRONG BUY",
-    aiText: "ICICI Bank लगातार नए शिखर छू रहा है। तकनीकी इंडिकेटर सुपर-बुलिश ट्रेंड दर्शाते हैं।",
-    chartData: [1065, 1080, 1092, 1100, 1105, 1112, 1118.50]
+    "symbol": "BAJFINANCE",
+    "name": "Bajaj Finance Ltd",
+    "tvSymbol": "NSE:BAJFINANCE"
   },
   {
-    symbol: "SBIN",
-    tvSymbol: "NSE:SBIN",
-    name: "State Bank of India",
-    price: 812.30,
-    change: 9.40,
-    changePercent: 1.17,
-    rsi: 62.1,
-    ema20: 798.50,
-    sma50: 780.00,
-    macd: "Bullish +5.3",
-    signal: "BUY",
-    aiText: "State Bank of India (SBI) अपने ऑल-टाइम हाई लेवल्स के करीब कंसोलिडेट कर रहा है। टारगेट ₹845।",
-    chartData: [780, 788, 795, 792, 804, 808, 812.30]
+    "symbol": "LT",
+    "name": "Larsen & Toubro Ltd",
+    "tvSymbol": "NSE:LT"
   },
   {
-    symbol: "ITC",
-    tvSymbol: "NSE:ITC",
-    name: "ITC Limited",
-    price: 492.15,
-    change: 3.25,
-    changePercent: 0.66,
-    rsi: 54.3,
-    ema20: 488.00,
-    sma50: 482.50,
-    macd: "Neutral +1.2",
-    signal: "HOLD",
-    aiText: "ITC मजबूत डिविडेंड यील्ड और स्थिर वॉल्यूम के साथ साइडवेज़ ट्रेंड दिखा रहा है।",
-    chartData: [482, 485, 487, 484, 490, 489, 492.15]
+    "symbol": "INFY",
+    "name": "Infosys Ltd",
+    "tvSymbol": "NSE:INFY"
   },
   {
-    symbol: "LT",
-    tvSymbol: "NSE:LT",
-    name: "Larsen & Toubro Ltd",
-    price: 3620.00,
-    change: 45.80,
-    changePercent: 1.28,
-    rsi: 65.5,
-    ema20: 3560.00,
-    sma50: 3510.00,
-    macd: "Bullish +18.4",
-    signal: "BUY",
-    aiText: "इन्फ्रास्ट्रक्चर ऑर्डर बुक मजबूत होने के कारण L&T में निरंतर बाइंग फ्लो जारी है।",
-    chartData: [3510, 3535, 3550, 3575, 3590, 3605, 3620.00]
+    "symbol": "TATAMOTORS",
+    "name": "Tata Motors Ltd",
+    "tvSymbol": "NSE:TATAMOTORS"
   },
   {
-    symbol: "BHARTIARTL",
-    tvSymbol: "NSE:BHARTIARTL",
-    name: "Bharti Airtel Ltd",
-    price: 1485.60,
-    change: 21.30,
-    changePercent: 1.45,
-    rsi: 68.2,
-    ema20: 1450.00,
-    sma50: 1420.00,
-    macd: "Strong Bullish +9.1",
-    signal: "STRONG BUY",
-    aiText: "टेलीकॉम एआरपीयू बढ़ने की उम्मीद से भारती एयरटेल मजबूत अपट्रेंड में ट्रेड कर रहा है।",
-    chartData: [1420, 1435, 1448, 1460, 1472, 1475, 1485.60]
+    "symbol": "TATASTEEL",
+    "name": "Tata Steel Ltd",
+    "tvSymbol": "NSE:TATASTEEL"
   },
   {
-    symbol: "ADANIENT",
-    tvSymbol: "NSE:ADANIENT",
-    name: "Adani Enterprises Ltd",
-    price: 2940.00,
-    change: 42.00,
-    changePercent: 1.45,
-    rsi: 61.2,
-    ema20: 2890.00,
-    sma50: 2820.00,
-    macd: "Bullish +11.2",
-    signal: "BUY",
-    aiText: "अडानी एंटरप्राइजेज में उच्च वॉल्यूम के साथ ब्रेकआउट देखा जा रहा है। 20 EMA पर सपोर्ट है।",
-    chartData: [2810, 2840, 2870, 2890, 2915, 2940.00]
+    "symbol": "ITC",
+    "name": "ITC Limited",
+    "tvSymbol": "NSE:ITC"
   },
   {
-    symbol: "BAJFINANCE",
-    tvSymbol: "NSE:BAJFINANCE",
-    name: "Bajaj Finance Ltd",
-    price: 7180.00,
-    change: 85.00,
-    changePercent: 1.20,
-    rsi: 57.8,
-    ema20: 7110.00,
-    sma50: 7020.00,
-    macd: "Bullish +15.6",
-    signal: "BUY",
-    aiText: "बजाज फाइनेंस ₹7,100 स्तरों के ऊपर कंसोलिडेट कर रहा है। मोमेंटम इंडिकेटर्स पॉजिटिव हैं।",
-    chartData: [7010, 7050, 7090, 7120, 7150, 7180.00]
+    "symbol": "ADANIENT",
+    "name": "Adani Enterprises Ltd",
+    "tvSymbol": "NSE:ADANIENT"
   },
   {
-    symbol: "WIPRO",
-    tvSymbol: "NSE:WIPRO",
-    name: "Wipro Ltd",
-    price: 520.40,
-    change: 6.20,
-    changePercent: 1.21,
-    rsi: 55.4,
-    ema20: 512.00,
-    sma50: 504.00,
-    macd: "Bullish +2.8",
-    signal: "BUY",
-    aiText: "विप्रो में निचले स्तरों से अच्छी रिकवरी देखी जा रही है। स्टॉपलॉस ₹508 रखें।",
-    chartData: [502, 506, 510, 514, 518, 520.40]
+    "symbol": "WIPRO",
+    "name": "Wipro Ltd",
+    "tvSymbol": "NSE:WIPRO"
   },
   {
-    symbol: "ZOMATO",
-    tvSymbol: "NSE:ZOMATO",
-    name: "Zomato Ltd",
-    price: 265.80,
-    change: 5.40,
-    changePercent: 2.07,
-    rsi: 69.5,
-    ema20: 255.00,
-    sma50: 242.00,
-    macd: "Strong Bullish +6.1",
-    signal: "STRONG BUY",
-    aiText: "जोमैटो मजबूत तिमाही नतीजों के बाद अपने 52-वीक हाई के नजदीक ट्रेड कर रहा है।",
-    chartData: [240, 245, 252, 258, 262, 265.80]
+    "symbol": "ETERNAL",
+    "name": "Zomato Ltd",
+    "tvSymbol": "NSE:ZOMATO"
   },
   {
-    symbol: "MARUTI",
-    tvSymbol: "NSE:MARUTI",
-    name: "Maruti Suzuki India Ltd",
-    price: 12350.00,
-    change: 120.00,
-    changePercent: 0.98,
-    rsi: 60.1,
-    ema20: 12180.00,
-    sma50: 12050.00,
-    macd: "Bullish +32.0",
-    signal: "BUY",
-    aiText: "मारुति सुजुकी ऑटो इंडेक्स में लीडरशिप बनाए हुए है। सपोर्ट ₹12,150 पर बना हुआ है।",
-    chartData: [12010, 12090, 12150, 12220, 12280, 12350.00]
+    "symbol": "MARUTI",
+    "name": "Maruti Suzuki India Ltd",
+    "tvSymbol": "NSE:MARUTI"
   }
-];
+].map(s => ({...s, price: NaN, change: NaN, changePercent: null}));
+
+// Upstox V3 Instrument Keys for Real-Time WebSocket Feeds
+const UPSTOX_INSTRUMENT_KEYS = {
+  "RELIANCE": "NSE_EQ|INE002A01018",
+  "TCS": "NSE_EQ|INE467B01029",
+  "TATAMOTORS": "NSE_EQ|INE155A01022",
+  "TATASTEEL": "NSE_EQ|INE081A01020",
+  "INFY": "NSE_EQ|INE009A01021",
+  "HDFCBANK": "NSE_EQ|INE040A01034",
+  "ICICIBANK": "NSE_EQ|INE090A01021",
+  "SBIN": "NSE_EQ|INE062A01020",
+  "BHARTIARTL": "NSE_EQ|INE397D01024",
+  "ITC": "NSE_EQ|INE154A01025",
+  "LT": "NSE_EQ|INE018A01030",
+  "ADANIENT": "NSE_EQ|INE423A01024",
+  "BAJFINANCE": "NSE_EQ|INE296A01024",
+  "WIPRO": "NSE_EQ|INE075A01022",
+  "ZOMATO": "NSE_EQ|INE758T01015",
+  "MARUTI": "NSE_EQ|INE585B01010"
+};
 
 let selectedStock = STOCKS[0];
 let stockChartInstance = null;
 let liveDataInterval = null;
+let restReconciliationInterval = null;
+let lastValidatedPrice = null;
+let upstoxWebSocket = null;
+let wsReconnectTimeout = null;
+let priceAlerts = []; // Legacy device-global alerts are disabled.
 let currentStockSearchQuery = "";
-let currentChartMode = "tradingview";
+let currentChartMode = "custom";
 
 // Initialize on load (handle both interactive/complete and DOMContentLoaded)
 function initApp() {
-  if (currentUser) {
-    checkActiveStatus();
-  } else {
-    showView("auth");
-  }
+  checkActiveStatus();
 }
 
 if (document.readyState === "loading") {
@@ -277,143 +152,96 @@ function toggleAuth(showRegister) {
 
 async function handleRegister(e) {
   e.preventDefault();
-  const name = document.getElementById("regName").value.trim();
-  const mobile = document.getElementById("regMobile").value.trim();
-  const email = document.getElementById("regEmail").value.trim().toLowerCase();
-  const alertBox = document.getElementById("authAlert");
-
-  alertBox.style.color = "var(--cyan)";
-  alertBox.innerText = "Submitting registration request to Supabase...";
-
+  const box = document.getElementById("authAlert");
   try {
-    const checkResp = await fetch(`${SUPABASE_URL}/rest/v1/app_users?email=eq.${email}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
+    if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+    const { data, error } = await authClient.auth.signUp({
+      email: document.getElementById("regEmail").value.trim().toLowerCase(),
+      password: document.getElementById("regPassword").value,
+      options: { data: {
+        full_name: document.getElementById("regName").value.trim(),
+        mobile_number: document.getElementById("regMobile").value.trim()
+      } }
     });
-    const existing = await checkResp.json();
-    if (existing && existing.length > 0) {
-      currentUser = existing[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-      return;
-    }
-
-    const insertResp = await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
-      method: "POST",
-      headers: {
-        "apikey": SUPABASE_ANON,
-        "Authorization": `Bearer ${SUPABASE_ANON}`,
-        "Content-Type": "application/json",
-        "Prefer": "return=representation"
-      },
-      body: JSON.stringify({
-        full_name: name,
-        mobile_number: mobile,
-        email: email,
-        status: "pending",
-        role: "user"
-      })
-    });
-
-    const data = await insertResp.json();
-    if (insertResp.ok && data && data.length > 0) {
-      currentUser = data[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-    } else {
-      alertBox.style.color = "var(--red)";
-      alertBox.innerText = "Error registering user: " + (data.message || "Please check details");
-    }
-  } catch (err) {
-    alertBox.style.color = "var(--red)";
-    alertBox.innerText = "Network error: " + err.message;
-  }
+    if (error) throw error;
+    document.getElementById("regPassword").value = "";
+    if (data.session) await checkActiveStatus();
+    else box.textContent = "Check your email to confirm registration, then sign in. Admin approval is also required.";
+  } catch (error) { box.textContent = error.message; }
 }
 
 async function handleLogin(e) {
   e.preventDefault();
-  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
-  const alertBox = document.getElementById("authAlert");
-
-  alertBox.style.color = "var(--cyan)";
-  alertBox.innerText = "Verifying with Supabase...";
-
-  const query = identifier.includes("@") ? `email=eq.${identifier}` : `mobile_number=eq.${identifier}`;
-
+  const box = document.getElementById("authAlert");
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?${query}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
+    if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+    const { error } = await authClient.auth.signInWithPassword({
+      email: document.getElementById("loginIdentifier").value.trim().toLowerCase(),
+      password: document.getElementById("loginPassword").value
     });
-    const users = await res.json();
-    if (users && users.length > 0) {
-      currentUser = users[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-    } else {
-      alertBox.style.color = "var(--red)";
-      alertBox.innerText = "User record not found. Please register first.";
-    }
-  } catch (err) {
-    alertBox.style.color = "var(--red)";
-    alertBox.innerText = "Login error: " + err.message;
-  }
-}
-
-function adminQuickLogin() {
-  document.getElementById("loginIdentifier").value = "arjunmalviya166@gmail.com";
-  toggleAuth(false);
-  handleLogin({ preventDefault: () => {} });
+    if (error) throw error;
+    document.getElementById("loginPassword").value = "";
+    await checkActiveStatus();
+  } catch (error) { box.textContent = error.message; }
 }
 
 async function checkActiveStatus() {
-  if (!currentUser) {
+  try {
+    if (!authClient) throw new Error("Set your new Supabase URL and public key in config.js.");
+    const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session) { currentUser = null; stopLivePriceStream(); document.getElementById("accessPanel").classList.add("hidden"); showView("auth"); return; }
+    const { data, error } = await authClient.auth.getUser();
+    if (error || !data.user) throw error || new Error("Please sign in again.");
+    const { data: profile, error: profileError } = await authClient.from("app_users")
+      .select("*").eq("id", data.user.id).single();
+    if (profileError || !profile) throw profileError || new Error("Profile is unavailable.");
+    currentUser = profile;
+  } catch (error) {
+    currentUser = null;
+    stopLivePriceStream();
     showView("auth");
+    document.getElementById("userHeader").classList.add("hidden");
+    document.getElementById("authAlert").textContent = error.message;
     return;
   }
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${currentUser.id}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
-    });
-    const users = await res.json();
-    if (users && users.length > 0) {
-      currentUser = users[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-    }
-  } catch (e) {
-    console.warn("Could not refresh live status", e);
-  }
-
+  loadAccessPanel();
   // Update Header
   document.getElementById("userHeader").classList.remove("hidden");
   document.getElementById("headerUserName").innerText = currentUser.full_name;
-  
+
   const statusBadge = document.getElementById("headerUserStatus");
   statusBadge.innerText = currentUser.status;
   statusBadge.className = `badge ${currentUser.status}`;
 
-  if (currentUser.status === "approved") {
+  if (hasActiveAccess()) {
     showView("dashboard");
+    tradeOwner = currentUser.id;
+    cancelTradeEdit();
+    loadTradeHistory();
     if (currentUser.role === "admin") {
       document.getElementById("adminPanel").classList.remove("hidden");
       loadAdminUsers();
     } else {
       document.getElementById("adminPanel").classList.add("hidden");
     }
-    
+
     // Defer chart canvas initialization until after the dashboard view is fully displayed and measured
     requestAnimationFrame(() => {
       initDashboardShares();
     });
   } else {
+    stopLivePriceStream();
     showView("pending");
-    document.getElementById("pendingMessage").innerText = 
-      `नमस्ते ${currentUser.full_name}, आपकी रिक्वेस्ट (Mobile: ${currentUser.mobile_number}, Email: ${currentUser.email}) एडमिन के पास पहुँच गई है। एडमिन द्वारा Rights (Approval) देने के बाद ही आप शेयर्स और लाइव चार्ट देख सकेंगे।`;
+    document.getElementById("pendingMessage").innerText =
+      `नमस्ते ${currentUser.full_name}, access pending, expired or revoked. Request a plan below; admin approval is required.`;
   }
 }
 
 function initDashboardShares() {
   // Security guard: ensure user is authenticated and approved
-  if (!currentUser || currentUser.status !== "approved") {
+  if (!currentUser || !hasActiveAccess()) {
     console.warn("Unauthorized attempt to initialize chart and share data.");
     destroyActiveChart();
     showView("auth");
@@ -423,7 +251,6 @@ function initDashboardShares() {
   populateQuickStockDropdown();
   renderSharesList();
   renderSelectedStock(selectedStock);
-  startLivePriceStream();
 }
 
 function populateQuickStockDropdown() {
@@ -433,7 +260,7 @@ function populateQuickStockDropdown() {
   STOCKS.forEach(stock => {
     const opt = document.createElement("option");
     opt.value = stock.symbol;
-    opt.innerText = `${stock.symbol} (₹${stock.price.toFixed(0)})`;
+    opt.innerText = stock.symbol;
     if (selectedStock && stock.symbol === selectedStock.symbol) {
       opt.selected = true;
     }
@@ -490,21 +317,7 @@ function addAndSelectCustomStock(symbolInput) {
     return;
   }
 
-  const newStock = {
-    symbol: sym,
-    tvSymbol: `NSE:${sym}`,
-    name: `${sym} (NSE Live)`,
-    price: 1000.00,
-    change: 12.50,
-    changePercent: 1.25,
-    rsi: 58.0,
-    ema20: 985.00,
-    sma50: 970.00,
-    macd: "Bullish +2.5",
-    signal: "BUY",
-    aiText: `${sym} का लाइव NSE चार्ट लोड हो गया है। ट्रेडिंगव्यू रियल-टाइम कैंडल्स और मार्केट वॉल्यूम सीधे NSE सर्वर से आ रहे हैं।`,
-    chartData: [960, 970, 985, 990, 995, 1000]
-  };
+  const newStock = { symbol: sym, name: sym, tvSymbol: `NSE:${sym}`, price: NaN, change: NaN, changePercent: null };
   STOCKS.unshift(newStock);
   populateQuickStockDropdown();
   clearStockSearch();
@@ -523,7 +336,7 @@ function clearStockSearch() {
 }
 
 function renderSharesList() {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   const container = document.getElementById("stocksListContainer");
   if (!container) return;
   container.innerHTML = "";
@@ -540,7 +353,7 @@ function renderSharesList() {
     container.innerHTML = `
       <div style="text-align: center; padding: 18px 10px; color: var(--text-muted); font-size: 13px;">
         <i class="fa-solid fa-circle-exclamation" style="font-size: 22px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
-        <span>"${currentStockSearchQuery}" प्रीसेट लिस्ट में नहीं है</span>
+        <span>"${escapeHtml(currentStockSearchQuery)}" प्रीसेट लिस्ट में नहीं है</span>
       </div>
       ${cleanQ ? `
         <div class="direct-search-banner" onclick="addAndSelectCustomStock('${cleanQ}')">
@@ -567,12 +380,12 @@ function renderSharesList() {
     div.innerHTML = `
       <div class="stock-row-top">
         <span class="stock-symbol">${stock.symbol}</span>
-        <span class="stock-price" id="listPrice_${stock.symbol}">₹${stock.price.toFixed(2)}</span>
+        <span class="stock-price" id="listPrice_${stock.symbol}">${Number.isFinite(stock.price) ? money(stock.price) : "—"}</span>
       </div>
       <div class="stock-row-sub">
         <span>${stock.name.substring(0, 22)}</span>
         <span class="stock-change ${isPositive ? 'positive' : 'negative'}" id="listChange_${stock.symbol}">
-          ${isPositive ? '+' : ''}${stock.change.toFixed(2)} (${isPositive ? '+' : ''}${stock.changePercent}%)
+          ${Number.isFinite(stock.change) ? money(stock.change) + " (" + stock.changePercent + "%)" : "No quote"}
         </span>
       </div>
     `;
@@ -599,52 +412,28 @@ function renderSharesList() {
 }
 
 function selectStock(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   selectedStock = stock;
+  lastValidatedPrice = stock.price;
   renderSharesList();
   renderSelectedStock(stock);
   const quickSelect = document.getElementById("quickStockSelect");
   if (quickSelect) {
     quickSelect.value = stock.symbol;
   }
+
+  renderActiveAlertsList();
+  // Trigger immediate REST market price reconciliation on stock selection switch
+
 }
 
 function renderSelectedStock(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
-  document.getElementById("selectedStockSymbol").innerText = stock.symbol;
-  document.getElementById("selectedStockName").innerText = stock.name;
-  
-  const isPos = stock.change >= 0;
-  const priceElem = document.getElementById("selectedStockPrice");
-  priceElem.innerText = `₹${stock.price.toFixed(2)}`;
-  priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-  const changeElem = document.getElementById("selectedStockChange");
-  changeElem.innerText = `${isPos ? '+' : ''}${stock.change.toFixed(2)} (${isPos ? '+' : ''}${stock.changePercent}%)`;
-  changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-  // Signal Badge
-  const signalBadge = document.getElementById("signalBadge");
-  signalBadge.innerText = stock.signal;
-  signalBadge.className = `badge ${stock.signal.includes("BUY") ? "approved" : "pending"}`;
-
-  // Indicators
-  document.getElementById("indRsi").innerText = stock.rsi;
-  document.getElementById("indEma").innerText = `₹${stock.ema20.toFixed(2)}`;
-  document.getElementById("indSma").innerText = `₹${stock.sma50.toFixed(2)}`;
-  document.getElementById("indMacd").innerText = stock.macd;
-
-  // AI Insight Text
-  document.getElementById("aiInsightText").innerText = stock.aiText;
-
-  // Update quick stock select dropdown if present
-  const quickSelect = document.getElementById("quickStockSelect");
-  if (quickSelect && quickSelect.value !== stock.symbol) {
-    quickSelect.value = stock.symbol;
-  }
-
-  // Load Stock via Upstox / Supabase service and render in TradingView Lightweight Charts
-  loadStockChartAndAnalysis(stock);
+ if (!hasActiveAccess()) return;
+ document.getElementById('selectedStockSymbol').textContent=stock.symbol;
+ document.getElementById('selectedStockName').textContent=stock.name;
+ const quick=document.getElementById('quickStockSelect');if(quick)quick.value=stock.symbol;
+ if(!lwChart)initLightweightChart();
+ onMarketSelection();
 }
 
 // -------------------------------------------------------------
@@ -683,6 +472,8 @@ function initLightweightChart() {
       console.warn("Chart remove err:", e);
     }
     lwChart = null;
+    candleSeries = volumeSeries = emaSeries = smaSeries = vwapSeries = bbUpperSeries = bbLowerSeries = null;
+    activeSrLines = [];
   }
   container.innerHTML = "";
 
@@ -784,6 +575,7 @@ function initLightweightChart() {
         width: container.clientWidth,
         height: container.clientHeight || 440
       });
+      ChartDrawingEngine.resizeCanvas();
     }
   });
 
@@ -805,76 +597,501 @@ function initLightweightChart() {
       legend.innerText = `O: ${ohlc.open.toFixed(2)}  H: ${ohlc.high.toFixed(2)}  L: ${ohlc.low.toFixed(2)}  C: ${ohlc.close.toFixed(2)}`;
     }
   });
+
+  // Initialize interactive drawing overlay canvas on top of chart
+  ChartDrawingEngine.init();
+}
+
+// -------------------------------------------------------------
+// INTERACTIVE CHART DRAWING ENGINE (TRENDLINES, S/R, RAYS)
+// -------------------------------------------------------------
+const ChartDrawingEngine = {
+  canvas: null,
+  ctx: null,
+  isEnabled: false,
+  activeTool: "trendline", // 'trendline', 'support', 'resistance', 'ray'
+  isDrawing: false,
+  startPoint: null,
+  currentPoint: null,
+  drawings: [], // array of drawn shapes: { type, start: {x,y}, end: {x,y}, color, lineWidth }
+
+  init() {
+    this.canvas = document.getElementById("chartDrawingCanvas");
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext("2d");
+    this.resizeCanvas();
+
+    // Bind event listeners only once
+    if (!this._bound) {
+      this._bound = true;
+
+      this.canvas.addEventListener("mousedown", (e) => this.handleMouseDown(e));
+      this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
+      this.canvas.addEventListener("mouseup", (e) => this.handleMouseUp(e));
+      this.canvas.addEventListener("mouseleave", () => this.handleMouseLeave());
+
+      // Touch events for mobile/tablet support
+      this.canvas.addEventListener("touchstart", (e) => {
+        if (!this.isEnabled) return;
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        this.handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => e.preventDefault() });
+      }, { passive: false });
+
+      this.canvas.addEventListener("touchmove", (e) => {
+        if (!this.isEnabled) return;
+        const touch = e.touches[0];
+        this.handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => e.preventDefault() });
+      }, { passive: false });
+
+      this.canvas.addEventListener("touchend", () => {
+        if (!this.isEnabled) return;
+        this.handleMouseUp();
+      });
+    }
+
+    this.render();
+  },
+
+  resizeCanvas() {
+    const wrapper = document.getElementById("chartContainerWrapper");
+    if (!this.canvas || !wrapper) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = wrapper.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.canvas.style.width = `${rect.width}px`;
+    this.canvas.style.height = `${rect.height}px`;
+
+    if (this.ctx) {
+      this.ctx.scale(dpr, dpr);
+    }
+    this.render();
+  },
+
+  getCanvasCoordinates(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  },
+
+  handleMouseDown(e) {
+    if (!this.isEnabled) return;
+    if (e.preventDefault) e.preventDefault();
+    const pt = this.getCanvasCoordinates(e);
+
+    if (this.activeTool === "support" || this.activeTool === "resistance") {
+      // Single-click horizontal line across the entire chart width
+      const color = this.activeTool === "support" ? "#00e676" : "#ff3d71";
+      const label = this.activeTool === "support" ? "Support" : "Resistance";
+      this.drawings.push({
+        type: "horizontal",
+        y: pt.y,
+        color: color,
+        label: label,
+        lineWidth: 2
+      });
+      this.updateCountBadge();
+      this.render();
+      return;
+    }
+
+    // Two-point tools (trendline, ray)
+    this.isDrawing = true;
+    this.startPoint = pt;
+    this.currentPoint = pt;
+    this.render();
+  },
+
+  handleMouseMove(e) {
+    if (!this.isEnabled) return;
+    const pt = this.getCanvasCoordinates(e);
+
+    if (this.isDrawing) {
+      if (e.preventDefault) e.preventDefault();
+      this.currentPoint = pt;
+      this.render();
+    }
+  },
+
+  handleMouseUp(e) {
+    if (!this.isEnabled || !this.isDrawing) return;
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (this.startPoint && this.currentPoint) {
+      const dx = this.currentPoint.x - this.startPoint.x;
+      const dy = this.currentPoint.y - this.startPoint.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Only save if line is at least 6 pixels long
+      if (dist >= 6) {
+        const color = this.activeTool === "ray" ? "#a855f7" : "#00e5ff";
+        this.drawings.push({
+          type: this.activeTool,
+          start: { x: this.startPoint.x, y: this.startPoint.y },
+          end: { x: this.currentPoint.x, y: this.currentPoint.y },
+          color: color,
+          lineWidth: 2
+        });
+        this.updateCountBadge();
+      }
+    }
+
+    this.isDrawing = false;
+    this.startPoint = null;
+    this.currentPoint = null;
+    this.render();
+  },
+
+  handleMouseLeave() {
+    if (this.isDrawing) {
+      this.handleMouseUp();
+    }
+  },
+
+  render() {
+    if (!this.ctx || !this.canvas) return;
+    const wrapper = document.getElementById("chartContainerWrapper");
+    if (!wrapper) return;
+    const w = wrapper.clientWidth;
+    const h = wrapper.clientHeight;
+
+    this.ctx.clearRect(0, 0, w, h);
+
+    // Draw saved trendlines & S/R lines
+    this.drawings.forEach((d) => {
+      this.drawShape(d, w, h);
+    });
+
+    // Draw active in-progress preview line
+    if (this.isDrawing && this.startPoint && this.currentPoint) {
+      const previewShape = {
+        type: this.activeTool,
+        start: this.startPoint,
+        end: this.currentPoint,
+        color: this.activeTool === "ray" ? "#a855f7" : "#00e5ff",
+        lineWidth: 2,
+        isPreview: true
+      };
+      this.drawShape(previewShape, w, h);
+    }
+  },
+
+  drawShape(d, w, h) {
+    const ctx = this.ctx;
+    ctx.save();
+
+    if (d.type === "horizontal") {
+      // Horizontal Support/Resistance Level Line
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      ctx.setLineDash([6, 4]);
+      ctx.moveTo(0, d.y);
+      ctx.lineTo(w, d.y);
+      ctx.stroke();
+
+      // Label on right price scale
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "left";
+      ctx.fillRect(8, d.y - 9, ctx.measureText(d.label).width + 8, 16);
+      ctx.fillStyle = "#0c121e";
+      ctx.fillText(d.label, 12, d.y + 3);
+    } else if (d.type === "trendline") {
+      // Trendline Segment
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      if (d.isPreview) {
+        ctx.setLineDash([4, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.moveTo(d.start.x, d.start.y);
+      ctx.lineTo(d.end.x, d.end.y);
+      ctx.stroke();
+
+      // Terminal anchor dots
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(d.start.x, d.start.y, 4, 0, Math.PI * 2);
+      ctx.arc(d.end.x, d.end.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.type === "ray") {
+      // Extended Ray
+      ctx.beginPath();
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = d.lineWidth || 2;
+      if (d.isPreview) ctx.setLineDash([4, 4]);
+      else ctx.setLineDash([]);
+
+      const dx = d.end.x - d.start.x;
+      const dy = d.end.y - d.start.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      let targetX = d.end.x;
+      let targetY = d.end.y;
+
+      if (len > 0) {
+        // Project forward across the canvas
+        const factor = Math.max(w, h) / len;
+        targetX = d.start.x + dx * factor;
+        targetY = d.start.y + dy * factor;
+      }
+
+      ctx.moveTo(d.start.x, d.start.y);
+      ctx.lineTo(targetX, targetY);
+      ctx.stroke();
+
+      // Start anchor
+      ctx.setLineDash([]);
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(d.start.x, d.start.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  },
+
+  updateCountBadge() {
+    const badge = document.getElementById("dtDrawingsCount");
+    if (badge) badge.innerText = this.drawings.length;
+  },
+
+  clear() {
+    this.drawings = [];
+    this.isDrawing = false;
+    this.startPoint = null;
+    this.currentPoint = null;
+    this.updateCountBadge();
+    this.render();
+  }
+};
+
+function toggleDrawingMode() {
+  ChartDrawingEngine.isEnabled = !ChartDrawingEngine.isEnabled;
+  const isEnabled = ChartDrawingEngine.isEnabled;
+
+  const canvas = document.getElementById("chartDrawingCanvas");
+  if (canvas) {
+    canvas.classList.toggle("drawing-active", isEnabled);
+  }
+
+  // Synchronize toolbar toggles
+  const btnToggle = document.getElementById("dtBtnToggle");
+  const toggleText = document.getElementById("dtToggleText");
+  const mainBtn = document.getElementById("btnDrawingToolsToggle");
+  const tip = document.getElementById("dtHelpTip");
+
+  if (btnToggle) btnToggle.classList.toggle("active", isEnabled);
+  if (toggleText) toggleText.innerText = isEnabled ? "Drawing: ON" : "Enable Drawing";
+  if (mainBtn) {
+    mainBtn.classList.toggle("active", isEnabled);
+    mainBtn.style.color = isEnabled ? "var(--cyan)" : "";
+    mainBtn.style.background = isEnabled ? "rgba(0, 229, 255, 0.15)" : "";
+  }
+
+  if (tip) {
+    if (isEnabled) {
+      tip.innerHTML = `<b style="color:var(--cyan)">Drawing Active</b>: Click and drag on chart to plot trendlines/levels`;
+    } else {
+      tip.innerText = `Click 'Enable Drawing' to manually plot trendlines/levels`;
+    }
+  }
+
+  // Ensure canvas is properly sized and rendered
+  ChartDrawingEngine.resizeCanvas();
+}
+
+function setDrawingTool(tool) {
+  ChartDrawingEngine.activeTool = tool;
+
+  // Automatically enable drawing mode if user picks a tool
+  if (!ChartDrawingEngine.isEnabled) {
+    toggleDrawingMode();
+  }
+
+  const buttons = {
+    trendline: document.getElementById("dtBtnTrendline"),
+    support: document.getElementById("dtBtnSupport"),
+    resistance: document.getElementById("dtBtnResistance"),
+    ray: document.getElementById("dtBtnRay")
+  };
+
+  Object.keys(buttons).forEach(k => {
+    if (buttons[k]) buttons[k].classList.toggle("active", k === tool);
+  });
+
+  const tip = document.getElementById("dtHelpTip");
+  if (tip) {
+    if (tool === "support") tip.innerText = "Click anywhere on the chart to set horizontal Support (Green)";
+    else if (tool === "resistance") tip.innerText = "Click anywhere on the chart to set horizontal Resistance (Red)";
+    else if (tool === "ray") tip.innerText = "Click start point, drag, and release to project a Ray trendline";
+    else tip.innerText = "Click start point, drag to end point, and release to plot Trendline";
+  }
+}
+
+function clearAllChartDrawings() {
+  ChartDrawingEngine.clear();
+}
+
+/**
+ * Export to PNG: Composite Lightweight Chart canvas + User Drawings overlay canvas + Header info
+ * Saves a high-resolution PNG image directly to user's downloads
+ */
+async function exportChartWithDrawingsToPng() {
+  const wrapper = document.getElementById("chartContainerWrapper");
+  if (!wrapper) return;
+
+  const btn = document.getElementById("dtBtnExportPng");
+  const originalHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Exporting...`;
+    btn.disabled = true;
+  }
+
+  try {
+    const dpr = window.devicePixelRatio || 1;
+    const width = wrapper.clientWidth;
+    const height = wrapper.clientHeight;
+
+    // Create offscreen export canvas
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = width * dpr;
+    exportCanvas.height = height * dpr;
+    const ctx = exportCanvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+
+    // 1. Draw solid dark chart background
+    ctx.fillStyle = "#0c121e";
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Extract Lightweight Chart canvas / takeScreenshot
+    let lwImageDrawn = false;
+    if (lwChart && typeof lwChart.takeScreenshot === "function") {
+      try {
+        const screenshotCanvas = lwChart.takeScreenshot();
+        if (screenshotCanvas) {
+          ctx.drawImage(screenshotCanvas, 0, 0, width, height);
+          lwImageDrawn = true;
+        }
+      } catch (err) {
+        console.warn("lwChart.takeScreenshot failed, falling back to DOM canvas grab:", err);
+      }
+    }
+
+    if (!lwImageDrawn) {
+      // Direct DOM canvas capture of Lightweight Charts internal canvases
+      const lwCanvases = wrapper.querySelectorAll("#lightweight_chart_container canvas");
+      if (lwCanvases && lwCanvases.length > 0) {
+        lwCanvases.forEach(c => {
+          try {
+            ctx.drawImage(c, 0, 0, width, height);
+            lwImageDrawn = true;
+          } catch (e) {
+            console.warn("Could not draw internal canvas:", e);
+          }
+        });
+      }
+    }
+
+    // 3. Composite user drawings from chartDrawingCanvas
+    const drawingCanvas = document.getElementById("chartDrawingCanvas");
+    if (drawingCanvas) {
+      try {
+        ctx.drawImage(drawingCanvas, 0, 0, width, height);
+      } catch (e) {
+        console.warn("Could not composite drawing canvas:", e);
+      }
+    }
+
+    // 4. Render decorative watermark / stock symbol info badge at top
+    const symbol = selectedStock ? selectedStock.symbol : "NSE_EQUITY";
+    const priceStr = selectedStock ? `₹${selectedStock.price.toFixed(2)}` : "";
+    const changeStr = selectedStock ? `${selectedStock.change >= 0 ? '+' : ''}${selectedStock.change.toFixed(2)} (${selectedStock.changePercent}%)` : "";
+    const changeColor = (selectedStock && selectedStock.change >= 0) ? "#00e676" : "#ff3d71";
+
+    ctx.save();
+    // Header box background
+    ctx.fillStyle = "rgba(12, 18, 30, 0.88)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(14, 12, 340, 52, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text: Stock Symbol
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(symbol, 24, 34);
+
+    // Text: Interval & Exchange tag
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#00e5ff";
+    ctx.fillText("1D • NSE", 120, 34);
+
+    // Text: Live Price and Net Change
+    ctx.font = "bold 13px monospace";
+    ctx.fillStyle = changeColor;
+    ctx.fillText(`${priceStr}  ${changeStr}`, 24, 54);
+
+    // Bottom Watermark
+    ctx.font = "10px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.textAlign = "right";
+    const dateStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    ctx.fillText(`Historical chart • ${dateStr} IST`, width - 16, height - 12);
+    ctx.restore();
+
+    // 5. Convert to Blob & trigger browser download
+    exportCanvas.toBlob((blob) => {
+      if (!blob) {
+        alert("Failed to generate image file.");
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.createElement("a");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      downloadLink.download = `${symbol}_Analysis_${timestamp}.png`;
+      downloadLink.href = url;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      const tip = document.getElementById("dtHelpTip");
+      if (tip) {
+        tip.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-check"></i> Chart exported to ${symbol}_Analysis_${timestamp}.png</span>`;
+        setTimeout(() => {
+          if (tip) tip.innerText = "Click on the chart to start plotting";
+        }, 4000);
+      }
+    }, "image/png");
+
+  } catch (err) {
+    console.error("Export to PNG error:", err);
+    alert("Export to PNG failed: " + err.message);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  }
 }
 
 // -------------------------------------------------------------
 // UPSTOX API V3 + SUPABASE EDGE RELAY SERVICE
 // -------------------------------------------------------------
 const UpstoxSupabaseService = {
-  getFunctionUrl() {
-    return localStorage.getItem("upstox_supabase_url") || "";
-  },
-  getAnonKey() {
-    return localStorage.getItem("upstox_supabase_anon") || (typeof SUPABASE_ANON !== "undefined" ? SUPABASE_ANON : "");
-  },
-  async fetchCandles(symbol, timeframe) {
-    const url = this.getFunctionUrl();
-    if (url) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": this.getAnonKey()
-          },
-          body: JSON.stringify({ symbol, timeframe })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.candles && json.candles.length > 0) {
-            updateDataFeedBadge("Upstox V3 Live • Supabase Edge Active");
-            return json.candles;
-          }
-        }
-      } catch (e) {
-        console.warn("Supabase Edge ping error, fallback to simulated relay:", e);
-      }
-    }
-    // High-performance realistic Indian stock candle generator
-    updateDataFeedBadge("Upstox V3 Market Relay • Supabase Edge Active");
-    return this.generateRealisticCandles(symbol, timeframe, 120);
-  },
-  generateRealisticCandles(symbol, timeframe, count) {
-    const basePrices = {
-      RELIANCE: 1240.30, TCS: 4125.00, TATAMOTORS: 978.60, TATASTEEL: 154.20,
-      INFY: 1540.25, HDFCBANK: 1640.20, ICICIBANK: 1285.40, SBIN: 842.10,
-      BHARTIARTL: 1485.00, ADANIENT: 2940.00, BAJFINANCE: 7180.00, WIPRO: 520.00,
-      ZOMATO: 265.00, MARUTI: 12350.00
-    };
-    let curPrice = basePrices[symbol] || (selectedStock ? selectedStock.price : 1000);
-    const candles = [];
-    const now = Date.now();
-    const stepMs = timeframe === "1m" ? 60000 : timeframe === "5m" ? 300000 : timeframe === "15m" ? 900000 : timeframe === "1h" ? 3600000 : 86400000;
-
-    for (let i = count; i >= 0; i--) {
-      const timeMs = now - (i * stepMs);
-      const dateObj = new Date(timeMs);
-      const change = (Math.random() - 0.48) * (curPrice * 0.015);
-      const open = curPrice;
-      const close = +(open + change).toFixed(2);
-      const high = +(Math.max(open, close) + Math.random() * (curPrice * 0.006)).toFixed(2);
-      const low = +(Math.min(open, close) - Math.random() * (curPrice * 0.006)).toFixed(2);
-      const volume = Math.floor(15000 + Math.random() * 85000);
-
-      const time = timeframe === "1D" 
-        ? dateObj.toISOString().split("T")[0] 
-        : Math.floor(timeMs / 1000);
-
-      candles.push({ time, open, high, low, close, volume });
-      curPrice = close;
-    }
-    return candles;
-  }
+ getFunctionUrl(){return SUPABASE_URL + '/functions/v1/upstox-market-data';}
 };
 
 function updateDataFeedBadge(text) {
@@ -932,7 +1149,7 @@ const AnalysisEngine = {
         avgLoss = (avgLoss * (period - 1) - diff) / period;
       }
     }
-    if (avgLoss === 0) return 100.0;
+    if (avgLoss === 0) return avgGain === 0 ? 50.0 : 100.0;
     const rs = avgGain / avgLoss;
     return +(100 - (100 / (1 + rs))).toFixed(1);
   },
@@ -1077,15 +1294,16 @@ const AnalysisEngine = {
     if (last.close > last.open && body > (last.high - last.low) * 0.85) {
       return "Bullish Marubozu (पूर्ण बायर्स डोमिनेंस)";
     }
-    return "हायर-हाई और हायर-लो अपट्रेंड सेटअप";
+    return "No supported candle pattern detected";
   }
 };
 
 // -------------------------------------------------------------
 // MAIN STOCK CHART LOADER & AI ANALYSIS RENDERER
 // -------------------------------------------------------------
-async function loadStockChartAndAnalysis(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
+async function loadStockChartAndAnalysis(stock, snapshot = null) {
+  if (!snapshot) { onMarketSelection(); return; }
+  if (!currentUser || !hasActiveAccess()) return;
 
   if (!lwChart) {
     initLightweightChart();
@@ -1096,7 +1314,25 @@ async function loadStockChartAndAnalysis(stock) {
   document.getElementById("legendInterval").innerText = currentTimeframe;
 
   // Fetch Candles via Upstox / Supabase Service
-  currentCandles = await UpstoxSupabaseService.fetchCandles(stock.symbol, currentTimeframe);
+  const requestedTimeframe = currentTimeframe;
+  const candles = snapshot.candles;
+  applyQuote(stock, snapshot);
+  if (selectedStock?.symbol !== stock.symbol || currentTimeframe !== requestedTimeframe) return;
+  currentCandles = candles;
+  if (!candles.length) {
+    if (candleSeries) candleSeries.setData([]);
+    if (volumeSeries) volumeSeries.setData([]);
+    for (const series of [emaSeries, smaSeries, vwapSeries, bbUpperSeries, bbLowerSeries]) {
+      if (series) series.setData([]);
+    }
+    for (const line of activeSrLines) { if (candleSeries) candleSeries.removePriceLine(line); }
+    activeSrLines = [];
+    document.querySelectorAll('[id^="ind"]').forEach(node => {
+      if (!node.children.length) node.textContent = 'Unavailable';
+    });
+    stopLivePriceStream();
+    return;
+  }
 
   if (!currentCandles || currentCandles.length === 0) return;
 
@@ -1120,6 +1356,11 @@ async function loadStockChartAndAnalysis(stock) {
     })));
   }
 
+  if (currentCandles.length < 50) {
+    document.querySelectorAll('[id^="ind"],[id^="aiBlock"]').forEach(node => { if (!node.children.length) node.textContent = 'At least 50 candles required for analysis'; });
+    if(lwChart)lwChart.timeScale().fitContent();
+    return;
+  }
   // 3. Run Analysis Engine
   const ema20 = AnalysisEngine.calculateEMA(currentCandles, 20);
   const sma50 = AnalysisEngine.calculateSMA(currentCandles, 50);
@@ -1257,41 +1498,21 @@ async function loadStockChartAndAnalysis(stock) {
 }
 
 function renderStructuredAiAnalysis(stock, price, ema, sma, rsi, macd, sr, pattern, atr) {
-  const isTrendBullish = price >= ema && ema >= sma;
-  const trendText = isTrendBullish
-    ? `${stock.symbol} स्पष्ट रूप से 20 EMA (₹${ema.toFixed(0)}) और 50 SMA (₹${sma.toFixed(0)}) के ऊपर बना हुआ है। प्राइस एक्शन लगातार हायर-हाई और हायर-लो फॉर्मेशन प्रदर्शित कर रहा है।`
-    : `${stock.symbol} में मूविंग एवरेजेस (₹${ema.toFixed(0)}) के समीप कंसोलिडेशन दिख रहा है। ट्रेंड में स्थिरता के लिए सपोर्ट लेवल पर क्लोजिंग आवश्यक है।`;
-  document.getElementById("aiBlockTrend").innerText = trendText;
-
-  const momText = `RSI वर्तमान में ${rsi.toFixed(1)} पर है। MACD हिस्टोग्राम (${macd.hist >= 0 ? '+' : ''}${macd.hist}) ${macd.status} दर्शा रहा है, जो बायर्स और सेलर्स के बीच संतुलित गति का तकनीकी प्रमाण है।`;
-  document.getElementById("aiBlockMomentum").innerText = momText;
-
-  document.getElementById("aiBlockLevels").innerHTML = `
-    <b>तात्कालिक सपोर्ट (S1):</b> ₹${sr.s1.toFixed(1)}<br>
-    <b>प्रमुख रेसिस्टेंस (R1):</b> ₹${sr.r1.toFixed(1)}<br>
-    <b>स्विंग दायरा:</b> ₹${sr.lowest.toFixed(0)} - ₹${sr.highest.toFixed(0)}
-  `;
-
-  document.getElementById("aiBlockPattern").innerText = `अंतिम कैंडल्स में "${pattern}" का निर्माण हुआ है। वॉल्यूम एक्टिविटी औसत 20-डे मूविंग वॉल्यूम के अनुरूप है।`;
-
-  const stoploss = (price - (atr * 1.5)).toFixed(1);
-  const target = (price + (atr * 2.5)).toFixed(1);
-  document.getElementById("aiBlockRisk").innerHTML = `
-    <b>तकनीकी इनवैलिडेशन (Stoploss):</b> ₹${stoploss} (यदि दैनिक कैंडल इसके नीचे बंद होती है तो सेटअप अमान्य होगा)<br>
-    <b>संभावित दायरा (Target Band):</b> ₹${target}<br>
-    <b>रिस्क-रिवॉर्ड रेशियो:</b> 1:1.7 (अनुकूल)
-  `;
-
-  document.getElementById("aiBlockSummary").innerText = `
-    चार्ट वर्तमान में तकनीकी नियमों के आधार पर स्पष्ट दिशा दर्शा रहा है। ₹${sr.s1.toFixed(0)} का सपोर्ट ज़ोन सुरक्षित रहने तक संरचना सकारात्मक है। बाज़ार की किसी भी अप्रत्याशित वोलैटिलिटी से सुरक्षा के लिए स्टॉपलॉस अनुशासन अनिवार्य है।
-  `;
+ report('aiBlockTrend', stock.symbol+' · '+currentTimeframe+' candles: close '+money(price)+', EMA20 '+money(ema)+', SMA50 '+money(sma)+'.');
+ report('aiBlockMomentum', 'RSI14: '+rsi.toFixed(1)+'. MACD histogram: '+macd.hist+'.');
+ report('aiBlockLevels', 'Calculated support '+money(sr.s1)+' / resistance '+money(sr.r1)+'.');
+ report('aiBlockPattern', pattern);
+ report('aiBlockRisk', 'ATR14: '+money(atr)+'. Indicator values are derived from the selected candles, not guaranteed future prices.');
+ report('aiBlockSummary', 'Rule-based historical analysis. Quote and candle timestamps may differ; no buy/sell recommendation is generated.');
 }
 
 // -------------------------------------------------------------
 // TIMEFRAME & INDICATOR TOGGLE CONTROLS
 // -------------------------------------------------------------
+function switchChartMode() { currentChartMode='custom'; onMarketSelection(); }
+
 function switchTimeframe(tf) {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   currentTimeframe = tf;
 
   document.querySelectorAll(".timeframe-tabs .tab-btn").forEach(btn => {
@@ -1342,86 +1563,211 @@ function toggleIndicator(ind) {
 }
 
 // -------------------------------------------------------------
-// REAL-TIME 60FPS LIVE PRICE STREAM WITH UPSTOX CANDLE UPDATE
+// REAL-TIME UPSTOX V3 WEBSOCKET & 60FPS LIVE PRICE STREAM
 // -------------------------------------------------------------
-function startLivePriceStream() {
-  if (liveDataInterval) clearInterval(liveDataInterval);
+let latencyMetrics = {
+  totalTicks: 0,
+  lastTickTime: null,
+  ticksThisSecond: 0,
+  tps: 0,
+  lastTotalLatency: null,
+  lastServerTransit: null,
+  lastLocalProcessing: null
+};
 
-  liveDataInterval = setInterval(() => {
-    if (!currentUser || currentUser.status !== "approved") {
-      clearInterval(liveDataInterval);
-      return;
+// Periodic TPS (ticks per second) counter reset
+setInterval(() => {
+  latencyMetrics.tps = latencyMetrics.ticksThisSecond;
+  latencyMetrics.ticksThisSecond = 0;
+}, 1000);
+
+function toggleLatencyDebugPanel() {
+  const panel = document.getElementById("wsLatencyDebugPanel");
+  const grid = document.getElementById("debugLatencyGridBody");
+  const icon = document.getElementById("btnToggleDebugIcon");
+  if (!panel) return;
+
+  if (grid.style.display === "none") {
+    grid.style.display = "grid";
+    if (icon) icon.className = "fa-solid fa-chevron-up";
+  } else {
+    grid.style.display = "none";
+    if (icon) icon.className = "fa-solid fa-chevron-down";
+  }
+}
+
+function updateLatencyDebugUI(transitMs, localProcMs, tickTimestampMs, ltp, feedType = "WS") {
+  const totalMs = (transitMs !== null && !isNaN(transitMs)) ? (transitMs + localProcMs) : localProcMs;
+
+  latencyMetrics.totalTicks++;
+  latencyMetrics.ticksThisSecond++;
+  latencyMetrics.lastTotalLatency = totalMs;
+  latencyMetrics.lastServerTransit = transitMs;
+  latencyMetrics.lastLocalProcessing = localProcMs;
+
+  const totalElem = document.getElementById("dbgTotalLatency");
+  const verdictElem = document.getElementById("dbgLatencyVerdit");
+  const transitElem = document.getElementById("dbgServerTransit");
+  const serverSubElem = document.getElementById("dbgServerSub");
+  const localElem = document.getElementById("dbgLocalProcess");
+  const tickTimeElem = document.getElementById("dbgTickTimestamp");
+  const tickOriginElem = document.getElementById("dbgTickOrigin");
+  const clientTimeElem = document.getElementById("dbgClientTime");
+  const tickValElem = document.getElementById("dbgLastTickVal");
+  const ticksCountElem = document.getElementById("dbgTicksReceived");
+  const modeBadge = document.getElementById("debugFeedModeBadge");
+
+  const now = new Date();
+  const clientTimeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+  if (clientTimeElem) clientTimeElem.innerText = clientTimeStr;
+
+  if (totalElem) {
+    totalElem.innerText = `${Math.round(totalMs)} ms`;
+    totalElem.className = "debug-stat-val " + (totalMs < 120 ? "latency-good" : (totalMs < 400 ? "latency-warn" : "latency-bad"));
+  }
+
+  if (verdictElem) {
+    if (transitMs === null || isNaN(transitMs)) {
+      verdictElem.innerHTML = `<span style="color:var(--cyan)">Local tick loop active (&lt;${localProcMs.toFixed(1)}ms)</span>`;
+    } else if (transitMs > 350) {
+      verdictElem.innerHTML = `<span style="color:var(--red)"><i class="fa-solid fa-cloud-arrow-down"></i> Delay is Server/Network side (${Math.round(transitMs)}ms)</span>`;
+    } else if (localProcMs > 25) {
+      verdictElem.innerHTML = `<span style="color:var(--amber)"><i class="fa-solid fa-desktop"></i> Delay is Local DOM/Render side (${localProcMs.toFixed(1)}ms)</span>`;
+    } else {
+      verdictElem.innerHTML = `<span style="color:var(--green)"><i class="fa-solid fa-check"></i> Real-Time Synced (Ultra Low Latency)</span>`;
+    }
+  }
+
+  if (transitElem) {
+    if (transitMs !== null && !isNaN(transitMs)) {
+      transitElem.innerText = `${Math.round(transitMs)} ms`;
+      transitElem.className = "debug-stat-val " + (transitMs < 100 ? "latency-good" : (transitMs < 300 ? "latency-warn" : "latency-bad"));
+    } else {
+      transitElem.innerText = `0 ms`;
+      transitElem.className = "debug-stat-val latency-good";
+    }
+  }
+
+  if (serverSubElem) {
+    serverSubElem.innerText = (transitMs !== null && !isNaN(transitMs))
+      ? (transitMs > 300 ? "High transit lag from broker" : "Broker network transit time")
+      : "Direct client-side stream";
+  }
+
+  if (localElem) {
+    localElem.innerText = `${localProcMs.toFixed(1)} ms`;
+    localElem.className = "debug-stat-val " + (localProcMs < 10 ? "latency-good" : (localProcMs < 30 ? "latency-warn" : "latency-bad"));
+  }
+
+  if (tickTimeElem) {
+    if (tickTimestampMs) {
+      const tickDate = new Date(tickTimestampMs);
+      tickTimeElem.innerText = tickDate.toTimeString().split(' ')[0] + '.' + String(tickDate.getMilliseconds()).padStart(3, '0');
+    } else {
+      tickTimeElem.innerText = clientTimeStr;
+    }
+  }
+
+  if (tickOriginElem) {
+    tickOriginElem.innerText = feedType === "WS" ? "Upstox V3 WS packet timestamp" : "High-Frequency Companion Loop";
+  }
+
+  if (tickValElem) {
+    tickValElem.innerText = `₹${ltp.toFixed(2)} (${latencyMetrics.tps} tps)`;
+  }
+
+  if (ticksCountElem) {
+    ticksCountElem.innerText = `${latencyMetrics.totalTicks} ticks profiled (${feedType})`;
+  }
+
+  if (modeBadge) {
+    if (feedType === "WS") {
+      modeBadge.innerHTML = `<i class="fa-solid fa-satellite-dish" style="font-size: 7px; margin-right: 4px;"></i> WS LIVE STREAM`;
+      modeBadge.style.color = "var(--green)";
+      modeBadge.style.borderColor = "rgba(0, 230, 118, 0.3)";
+    } else {
+      modeBadge.innerHTML = `<i class="fa-solid fa-bolt" style="font-size: 7px; margin-right: 4px;"></i> ENGINE STREAM ACTIVE`;
+      modeBadge.style.color = "var(--cyan)";
+      modeBadge.style.borderColor = "rgba(0, 229, 255, 0.3)";
+    }
+  }
+}
+
+function handleUpstoxWsMessage(data) {
+  if (!data || !selectedStock) return;
+  const currentKey = UPSTOX_INSTRUMENT_KEYS[selectedStock.symbol] || `NSE_EQ|${selectedStock.symbol}`;
+
+  // Capture precise WebSocket message arrival timestamp
+  const wsArrivalTime = performance.now();
+  const clientEpochMs = Date.now();
+
+  // Upstox V3 WebSocket feeds return tick packets with feeds object keyed by instrument key
+  let feed = null;
+  if (data.feeds && data.feeds[currentKey]) {
+    feed = data.feeds[currentKey];
+  } else if (data[currentKey]) {
+    feed = data[currentKey];
+  } else if (data.data && data.data[currentKey]) {
+    feed = data.data[currentKey];
+  } else if (data.ltp !== undefined || data.price !== undefined) {
+    feed = data;
+  }
+
+  if (feed) {
+    let tickPrice = null;
+    let tickVol = 0;
+    let packetTimestamp = null;
+
+    // Check various Upstox V3 JSON payload structures (Full mode vs LTP mode)
+    if (feed.fullFeed && feed.fullFeed.marketFF && feed.fullFeed.marketFF.ltpc) {
+      tickPrice = feed.fullFeed.marketFF.ltpc.ltp;
+      tickVol = feed.fullFeed.marketFF.v || 0;
+      packetTimestamp = feed.fullFeed.marketFF.ltpc.ltt || feed.fullFeed.marketFF.ltt;
+    } else if (feed.ltpc && feed.ltpc.ltp !== undefined) {
+      tickPrice = feed.ltpc.ltp;
+      packetTimestamp = feed.ltpc.ltt || feed.ltt;
+    } else if (feed.ltp !== undefined) {
+      tickPrice = feed.ltp;
+      packetTimestamp = feed.ltt || feed.timestamp;
+    } else if (feed.price !== undefined) {
+      tickPrice = feed.price;
+      packetTimestamp = feed.timestamp;
     }
 
-    if (!selectedStock || currentCandles.length === 0) return;
-
-    // Small authentic equity market tick (+/- 0.15%)
-    const isTickPositive = Math.random() > 0.48;
-    const tickMagnitude = (Math.random() * 0.0018 + 0.0004);
-    const delta = (isTickPositive ? 1 : -1) * (selectedStock.price * tickMagnitude);
-
-    selectedStock.price = parseFloat(Math.max(1, selectedStock.price + delta).toFixed(2));
-    selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
-    const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
-    selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
-
-    // Update the live candlestick in TradingView Lightweight Charts
-    const lastCandle = currentCandles[currentCandles.length - 1];
-    lastCandle.close = selectedStock.price;
-    lastCandle.high = Math.max(lastCandle.high, selectedStock.price);
-    lastCandle.low = Math.min(lastCandle.low, selectedStock.price);
-    lastCandle.volume += Math.floor(Math.random() * 25 + 5);
-
-    if (candleSeries) {
-      candleSeries.update({
-        time: lastCandle.time,
-        open: lastCandle.open,
-        high: lastCandle.high,
-        low: lastCandle.low,
-        close: lastCandle.close
-      });
+    if (!packetTimestamp && data.timestamp) {
+      packetTimestamp = data.timestamp;
     }
 
-    if (volumeSeries && activeIndicators.volume) {
-      volumeSeries.update({
-        time: lastCandle.time,
-        value: lastCandle.volume,
-        color: lastCandle.close >= lastCandle.open ? "rgba(0, 230, 118, 0.4)" : "rgba(255, 61, 113, 0.4)"
-      });
+    // Convert packet timestamp to milliseconds if in seconds
+    let serverTransitMs = null;
+    if (packetTimestamp) {
+      const tsNum = typeof packetTimestamp === 'string' ? parseInt(packetTimestamp, 10) : packetTimestamp;
+      const tickEpochMs = tsNum < 1e11 ? tsNum * 1000 : tsNum;
+      serverTransitMs = Math.max(0, clientEpochMs - tickEpochMs);
     }
 
-    // Update Header UI Elements
-    const priceElem = document.getElementById("selectedStockPrice");
-    const changeElem = document.getElementById("selectedStockChange");
-    if (priceElem && changeElem) {
-      const isPos = selectedStock.change >= 0;
-      priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-      priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
+    if (tickPrice !== null && !isNaN(tickPrice) && tickPrice > 0) {
+      const parsedPrice = parseFloat(tickPrice);
+      // Validation against last known reliable REST price snapshot to reject corrupted/outlier ticks (> 20% divergence)
+      const benchmarkPrice = lastValidatedPrice || selectedStock.price;
+      if (benchmarkPrice > 0) {
+        const divergenceRatio = Math.abs(parsedPrice - benchmarkPrice) / benchmarkPrice;
+        if (divergenceRatio > 0.20) {
+          console.warn(`[Tick Validation] Discarding anomalous WS tick for ${selectedStock.symbol}: ₹${parsedPrice} (Benchmark: ₹${benchmarkPrice})`);
+          return;
+        }
+      }
 
-      priceElem.classList.remove("flash-green", "flash-red");
-      void priceElem.offsetWidth;
-      priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
+      // Execute render and measure local execution duration
+      const renderStart = performance.now();
+      applyPriceTick(parsedPrice, tickVol);
+      const localProcDuration = performance.now() - renderStart;
 
-      changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-      changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
+      // Update dedicated latency debug UI panel
+      updateLatencyDebugUI(serverTransitMs, localProcDuration, packetTimestamp, parsedPrice, "WS");
     }
-
-    // Update legend
-    const legend = document.getElementById("legendOhlc");
-    if (legend) {
-      legend.innerText = `O: ${lastCandle.open.toFixed(2)}  H: ${lastCandle.high.toFixed(2)}  L: ${lastCandle.low.toFixed(2)}  C: ${lastCandle.close.toFixed(2)}`;
-    }
-
-    // Update stock item in shares list
-    const listPriceElem = document.getElementById(`listPrice_${selectedStock.symbol}`);
-    const listChangeElem = document.getElementById(`listChange_${selectedStock.symbol}`);
-    if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-    if (listChangeElem) {
-      const isPos = selectedStock.change >= 0;
-      listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
-      listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-    }
-  }, 2200);
+  }
 }
 
 // -------------------------------------------------------------
@@ -1432,8 +1778,8 @@ function openSupabaseModal() {
   if (modal) modal.classList.remove("hidden");
   const urlInput = document.getElementById("supabaseFunctionUrl");
   const keyInput = document.getElementById("supabaseAnonKey");
-  if (urlInput) urlInput.value = localStorage.getItem("upstox_supabase_url") || "";
-  if (keyInput) keyInput.value = localStorage.getItem("upstox_supabase_anon") || "";
+  if (urlInput) { urlInput.value = UpstoxSupabaseService.getFunctionUrl(); urlInput.readOnly = true; }
+  if (keyInput) { keyInput.value = SUPABASE_ANON; keyInput.readOnly = true; }
 }
 
 function closeSupabaseModal() {
@@ -1441,20 +1787,7 @@ function closeSupabaseModal() {
   if (modal) modal.classList.add("hidden");
 }
 
-function saveSupabaseSettings() {
-  const urlInput = document.getElementById("supabaseFunctionUrl");
-  const keyInput = document.getElementById("supabaseAnonKey");
-  if (urlInput && urlInput.value.trim()) {
-    localStorage.setItem("upstox_supabase_url", urlInput.value.trim());
-  }
-  if (keyInput && keyInput.value.trim()) {
-    localStorage.setItem("upstox_supabase_anon", keyInput.value.trim());
-  }
-  closeSupabaseModal();
-  if (selectedStock) {
-    loadStockChartAndAnalysis(selectedStock);
-  }
-}
+function saveSupabaseSettings() { closeSupabaseModal(); }
 
 async function testSupabaseConnection() {
   const statusElem = document.getElementById("bridgeStatusText");
@@ -1463,7 +1796,7 @@ async function testSupabaseConnection() {
 
   if (!url) {
     if (statusElem) {
-      statusElem.innerHTML = `<span style="color:var(--amber);">⚠️ कोई URL दर्ज नहीं है। वर्तमान में <b>Upstox V3 Simulated High-Frequency Engine</b> सक्रिय है।</span>`;
+      statusElem.innerHTML = `<span style="color:var(--amber);">Supabase is not configured. Set the project URL and public key in config.js.</span>`;
     }
     return;
   }
@@ -1475,13 +1808,13 @@ async function testSupabaseConnection() {
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON, "Authorization": `Bearer ${await sessionToken()}` },
       body: JSON.stringify({ action: "ping", symbol: "RELIANCE" })
     });
     if (res.ok) {
       const data = await res.json();
       if (statusElem) {
-        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> कनेक्ट सफल!</span> Source: ${data.source || 'Upstox V3 Edge Function'}`;
+        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> कनेक्ट सफल!</span> Source: ${escapeHtml(data.source || 'Upstox V3 Edge Function')} — ${data.configured ? 'Upstox token configured' : 'Upstox token missing'}`;
       }
     } else {
       if (statusElem) {
@@ -1495,67 +1828,226 @@ async function testSupabaseConnection() {
   }
 }
 
-async function loadAdminUsers() {
-  if (!currentUser || currentUser.role !== "admin") return;
-  const tbody = document.getElementById("userTableBody");
-  if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Loading registered users...</td></tr>`;
+// -------------------------------------------------------------
+// PRICE ALERTS & NON-INTRUSIVE TOAST NOTIFICATIONS
+// -------------------------------------------------------------
+function openSetAlertModal() {
+  if (!selectedStock) return;
+  const modal = document.getElementById("setAlertModal");
+  if (!modal) return;
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*&order=created_at.desc`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
+  const symbolElem = document.getElementById("alertStockSymbol");
+  const nameElem = document.getElementById("alertStockName");
+  const priceElem = document.getElementById("alertCurrentPrice");
+  const thresholdInput = document.getElementById("alertThresholdPrice");
+
+  if (symbolElem) symbolElem.innerText = selectedStock.symbol;
+  if (nameElem) nameElem.innerText = selectedStock.name;
+  if (priceElem) priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
+  if (thresholdInput) {
+    thresholdInput.value = selectedStock.price.toFixed(2);
+    thresholdInput.focus();
+  }
+
+  renderActiveAlertsList();
+  modal.classList.remove("hidden");
+}
+
+function closeSetAlertModal() {
+  const modal = document.getElementById("setAlertModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function saveStockAlert() {
+  if (!selectedStock) return;
+  const condition = document.getElementById("alertCondition").value;
+  const thresholdInput = document.getElementById("alertThresholdPrice");
+  const threshold = parseFloat(thresholdInput.value);
+
+  if (isNaN(threshold) || threshold <= 0) {
+    showToast("Invalid Price", "कृपया एक वैध मूल्य दर्ज करें।", "red");
+    return;
+  }
+
+  const newAlert = {
+    id: "alert_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+    symbol: selectedStock.symbol,
+    condition: condition, // 'gte' or 'lte'
+    threshold: threshold,
+    createdAt: new Date().toISOString(),
+    createdPrice: selectedStock.price
+  };
+
+  priceAlerts.push(newAlert);
+  localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+
+  renderActiveAlertsList();
+  showToast(
+    `Alert Set: ${selectedStock.symbol}`,
+    `जब मूल्य ₹${threshold.toFixed(2)} (${condition === 'gte' ? '≥' : '≤'}) पहुंचेगा, तब अलर्ट प्राप्त होगा।`,
+    "green"
+  );
+  closeSetAlertModal();
+}
+
+function removeStockAlert(alertId) {
+  priceAlerts = priceAlerts.filter(a => a.id !== alertId);
+  localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+  renderActiveAlertsList();
+  showToast("Alert Removed", "अलर्ट सफलतापूर्वक हटा दिया गया।", "red");
+}
+
+function renderActiveAlertsList() {
+  const listContainer = document.getElementById("activeAlertsList");
+  if (!listContainer || !selectedStock) return;
+
+  const currentStockAlerts = priceAlerts.filter(a => a.symbol === selectedStock.symbol);
+  if (currentStockAlerts.length === 0) {
+    listContainer.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); padding: 4px 0;">इस स्टॉक के लिए कोई सक्रिय अलर्ट नहीं है।</div>`;
+    return;
+  }
+
+  listContainer.innerHTML = currentStockAlerts.map(a => `
+    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 6px 10px; border-radius: 6px; font-size: 11px; border: 1px solid var(--border);">
+      <div>
+        <span style="font-weight: 700; color: var(--cyan);">${a.symbol}</span>
+        <span style="color: var(--text-muted); margin: 0 4px;">${a.condition === 'gte' ? '≥' : '≤'}</span>
+        <span style="font-weight: 700; color: ${a.condition === 'gte' ? 'var(--green)' : 'var(--red)'};">₹${a.threshold.toFixed(2)}</span>
+      </div>
+      <button class="btn-sm btn-red" style="padding: 2px 6px; font-size: 10px;" onclick="removeStockAlert('${a.id}')">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+  `).join("");
+}
+
+function checkPriceAlerts(symbol, currentPrice, prevPrice) {
+  if (!priceAlerts || priceAlerts.length === 0) return;
+
+  const matchedAlerts = [];
+  const remainingAlerts = [];
+
+  priceAlerts.forEach(alert => {
+    if (alert.symbol !== symbol) {
+      remainingAlerts.push(alert);
+      return;
+    }
+
+    let triggered = false;
+    if (alert.condition === "gte" && currentPrice >= alert.threshold) {
+      triggered = true;
+    } else if (alert.condition === "lte" && currentPrice <= alert.threshold) {
+      triggered = true;
+    }
+
+    if (triggered) {
+      matchedAlerts.push(alert);
+    } else {
+      remainingAlerts.push(alert);
+    }
+  });
+
+  if (matchedAlerts.length > 0) {
+    priceAlerts = remainingAlerts;
+    localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
+
+    matchedAlerts.forEach(a => {
+      const isAbove = a.condition === "gte";
+      const icon = isAbove ? "fa-arrow-trend-up" : "fa-arrow-trend-down";
+      const colorType = isAbove ? "green" : "red";
+      showToast(
+        `🚨 Price Alert: ${a.symbol}`,
+        `वर्तमान मूल्य ₹${currentPrice.toFixed(2)} लक्ष्य ₹${a.threshold.toFixed(2)} के पार (${isAbove ? '≥' : '≤'}) पहुंच चुका है!`,
+        colorType,
+        true
+      );
     });
-    const users = await res.json();
-    tbody.innerHTML = "";
 
-    users.forEach(u => {
-      const isApproved = u.status === "approved";
-      const isRejected = u.status === "rejected";
-      const isAdmin = u.role === "admin";
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>
-          <div style="font-weight:600;">${u.full_name} ${isAdmin ? '<span style="color:var(--cyan);">(Admin)</span>' : ''}</div>
-          <div style="color:var(--text-muted); font-size:11px;">${u.email}</div>
-        </td>
-        <td>${u.mobile_number}</td>
-        <td>
-          <span class="badge ${u.status}">${u.status}</span>
-        </td>
-        <td>
-          <div class="action-btn-group">
-            ${!isApproved ? `<button class="btn-sm btn-green" onclick="updateUserStatus('${u.id}', 'approved')"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
-            ${!isRejected && !isAdmin ? `<button class="btn-sm btn-red" onclick="updateUserStatus('${u.id}', 'rejected')"><i class="fa-solid fa-xmark"></i> Reject</button>` : ''}
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--red);">Failed to load users: ${err.message}</td></tr>`;
+    // Refresh modal list if open
+    const modal = document.getElementById("setAlertModal");
+    if (modal && !modal.classList.contains("hidden")) {
+      renderActiveAlertsList();
+    }
   }
 }
 
-async function updateUserStatus(userId, status) {
+// Subtle Audio Ping Effect for Real-Time Price Alerts
+function playAlertPingSound(freq = 880, duration = 0.22) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
-      method: "PATCH",
-      headers: {
-        "apikey": SUPABASE_ANON,
-        "Authorization": `Bearer ${SUPABASE_ANON}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        status: status,
-        approved_by: currentUser.email,
-        approved_at: new Date().toISOString()
-      })
-    });
-    loadAdminUsers();
-  } catch (e) {
-    alert("Error updating status: " + e.message);
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    // Smooth dual-tone chime: First tone 880Hz (A5), resolving to 1320Hz (E6)
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.08);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.02); // subtle non-intrusive volume
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + duration + 0.05);
+
+    // Auto close audio context after playing
+    setTimeout(() => {
+      try { ctx.close(); } catch (e) {}
+    }, (duration + 0.2) * 1000);
+  } catch (err) {
+    console.debug("AudioContext ping omitted:", err);
   }
+}
+
+// Non-intrusive Toast Notification Handler
+function showToast(title, message, type = "cyan", playSound = false) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  // Play subtle ping audio when requested or on alert hit
+  if (playSound || title.includes("Price Alert")) {
+    playAlertPingSound(type === "green" ? 987.77 : type === "red" ? 740 : 880);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast-alert ${type === "green" ? "green" : type === "red" ? "red" : ""}`;
+
+  let iconHtml = '<i class="fa-solid fa-bell" style="color:var(--cyan); font-size:16px; margin-top:2px;"></i>';
+  if (type === "green") {
+    iconHtml = '<i class="fa-solid fa-circle-check" style="color:var(--green); font-size:16px; margin-top:2px;"></i>';
+  } else if (type === "red") {
+    iconHtml = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red); font-size:16px; margin-top:2px;"></i>';
+  }
+
+  toast.innerHTML = `
+    ${iconHtml}
+    <div style="flex: 1;">
+      <div style="font-weight: 700; font-size: 13px; margin-bottom: 2px; color: var(--text);">${title}</div>
+      <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">${message}</div>
+    </div>
+    <button style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 12px;" onclick="this.parentElement.remove()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  // Auto-dismiss after 5.5 seconds with fade-out
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(10px) scale(0.95)";
+    setTimeout(() => {
+      if (toast.parentElement) toast.remove();
+    }, 320);
+  }, 5500);
 }
 
 function destroyActiveChart() {
@@ -1571,11 +2063,16 @@ function destroyActiveChart() {
   if (container) container.innerHTML = "";
 }
 
-function logout() {
-  if (liveDataInterval) clearInterval(liveDataInterval);
+async function logout() {
+  if (authClient) await authClient.auth.signOut({ scope: "local" });
+  stopLivePriceStream();
   destroyActiveChart();
   localStorage.removeItem("app_user");
   currentUser = null;
+  tradeRows = []; tradeOwner = null;
+  document.getElementById("accessPanel").classList.add("hidden");
+  document.getElementById("tradeTableBody").innerHTML = "";
+  document.getElementById("holdingsBody").innerHTML = "";
   document.getElementById("userHeader").classList.add("hidden");
   showView("auth");
 }

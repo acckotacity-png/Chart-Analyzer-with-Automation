@@ -1,59 +1,24 @@
-# Upstox API V3 + Supabase Edge Functions Setup Guide
+# Supabase and Upstox setup
 
-## 🔒 महत्वपूर्ण सुरक्षा नियम (Security First)
-**Upstox API Key, API Secret, और Access Token को कभी भी GitHub Repository या Frontend (HTML/JS) में न रखें!**
-सभी सीक्रेट्स केवल **Supabase Secrets Vault** में सुरक्षित रहेंगे। 
+Keep your GitHub repository. Select the intended Supabase project explicitly. The URL supplied for this update matches the project's previous URL; a different project has not been created.
 
-Frontend केवल Supabase Edge Function के सुरक्षित एंडपॉइंट से डेटा लेगा:
-`Frontend (GitHub Pages)` ➔ `Supabase Edge Function` ➔ `Upstox API V3 (Secrets Safe)` ➔ `TradingView Lightweight Charts` ➔ `Analysis Engine`
+1. Complete the Auth/database setup in README.md. For an existing database, inspect its schema and migrate legacy identities before deploying. The migration also archives legacy profiles safely when no Auth accounts exist; users must re-register. Existing Auth accounts require a separate identity migration.
+2. Set config.js to the selected project's URL and public key, then run node scripts/build-web.cjs.
+3. Link and deploy to that SAME project:
 
----
-
-## 🚀 चरण 1: Supabase CLI में Secrets जोड़ें
-अपने टर्मिनल (Terminal) में ये कमांड चलाएँ:
-
-```bash
-# 1. Supabase CLI लॉगिन करें
+```sh
 supabase login
-
-# 2. अपने प्रोजेक्ट को लिंक करें
-supabase link --project-ref your-supabase-project-id
-
-# 3. Upstox API V3 के सीक्रेट्स सुरक्षित सेट करें (Secrets Vault)
-supabase secrets set UPSTOX_API_KEY="your_upstox_api_key"
-supabase secrets set UPSTOX_API_SECRET="your_upstox_api_secret"
-supabase secrets set UPSTOX_ACCESS_TOKEN="your_upstox_access_token"
+supabase link --project-ref YOUR_PROJECT_REF
+supabase secrets set UPSTOX_ACCESS_TOKEN=YOUR_CURRENT_TOKEN
+supabase functions deploy upstox-market-data --project-ref YOUR_PROJECT_REF
 ```
 
----
+Keep broker tokens only in Edge Function secrets. Renew the token as required by Upstox. The function uses the platform-provided SUPABASE_URL and SUPABASE_ANON_KEY to validate the user's session and approved profile on EVERY request. Gateway JWT verification is disabled in config.toml because authentication is performed inside the function; this does not make data anonymous.
 
-## 🚀 चरण 2: Edge Function डिप्लॉय करें
-इस प्रोजेक्ट में `supabase/functions/upstox-market-data/index.ts` फ़ाइल पहले से तैयार है। इसे डिप्लॉय करने के लिए चलाएँ:
+Supported requests are POST `ping`, `market_status`, and `get_snapshot` with a current NSE equity symbol and timeframe (1m, 5m, 15m, 1h, 1D). The function resolves symbols from the Upstox instrument directory and returns broker candles, quote timestamp, and NSE market status. Send apikey plus Authorization: Bearer USER_ACCESS_TOKEN. An approved, unexpired app plan is required. Unsupported symbols/actions return an error.
 
-```bash
-supabase functions deploy upstox-market-data --no-verify-jwt
-```
+The function obtains NSE market status before automatic refresh. On `NORMAL_CLOSE`, a background refresh returns a paused status and makes no candle/quote request. Manual snapshots may show the last broker quote with its exchange timestamp. Historical and intraday candles use Upstox endpoints and are merged only after validation. Missing tokens, upstream failures, invalid exchange data, and empty responses are errors, never fabricated success. Ping reports token presence, not token validity; test an authenticated snapshot to verify Upstox access.
 
-डिप्लॉय होने के बाद आपको एक सुरक्षित URL मिलेगा:
-`https://<your-project-ref>.supabase.co/functions/v1/upstox-market-data`
+Deployment validation: confirm signed-out requests return 401, pending users return 403, approved users can obtain candles, users cannot read other profiles or change approval/role, and only the approved administrator can approve users. Validate both deployed Pages and Render assets after changing project configuration.
 
----
-
-## 🚀 चरण 3: वेब ऐप (Frontend) में Supabase URL जोड़ें
-ऐप के अंदर **"Supabase & Data Bridge Settings"** बटन पर क्लिक करें और अपना:
-- **Supabase Edge Function URL**: `https://<your-project-ref>.supabase.co/functions/v1/upstox-market-data`
-- **Supabase Anon Key**: (पब्लिक एनॉन की)
-
-यदि आप अभी केवल टेस्ट करना चाहते हैं, तो ऐप का **"Smart Development Relay"** अपने आप वास्तविक रियलिस्टिक कैंडल्स और 60fps लाइव टिक स्ट्रीम लोड करेगा ताकि आपका काम बिना रुके चलता रहे।
-
----
-
-## 📊 एनालिसिस इंजन में शामिल इंडिकेटर्स:
-1. **EMA 20 & SMA 50**: ट्रेंड ट्रैकिंग
-2. **RSI 14**: मोमेंटम और ओवरबॉट/ओवरसोल्ड ज़ोन
-3. **MACD (12, 26, 9)**: बुलिश/बेयरिश क्रॉसओवर
-4. **Bollinger Bands (20, 2)**: वोलैटिलिटी और स्क्वीज़ डिटेक्शन
-5. **VWAP**: वॉल्यूम वेटेड एवरेज प्राइस
-6. **Support & Resistance (S1, S2, R1, R2)**: स्विंग हाई और पिवट लेवल्स
-7. **कैंडलस्टिक पैटर्न्स**: बुलिश एंगल्फिंग, हैमर, डोजी
-8. **AI विज़न लेयर**: बिना किसी झूठे लाभ के वादों (No Guaranteed Returns) के साथ तटस्थ तकनीकी मार्गदर्शन।
+References: [Upstox V3 historical candles](https://upstox.com/developer/api-documentation/v3/get-historical-candle-data/), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Supabase profiles](https://supabase.com/docs/guides/auth/managing-user-data).

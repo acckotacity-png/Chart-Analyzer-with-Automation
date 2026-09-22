@@ -1,0 +1,3 @@
+[functions.upstox-market-data]
+verify_jwt = false
+# The function verifies the user with Auth and checks approval on every request.

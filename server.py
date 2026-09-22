@@ -4,7 +4,6 @@ Simple HTTP Server with PWA support to serve Chart Analyzer Pro web portal.
 Can be used directly on Render.com or any server.
 """
 import http.server
-import socketserver
 import os
 import sys
 
@@ -17,13 +16,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # Enable CORS and caching headers
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
 if __name__ == "__main__":
     os.chdir(DIRECTORY)
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    with http.server.ThreadingHTTPServer(("", PORT), Handler) as httpd:
         print(f"Server started on http://0.0.0.0:{PORT} serving {DIRECTORY}")
         try:
             httpd.serve_forever()

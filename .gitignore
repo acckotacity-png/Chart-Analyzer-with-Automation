@@ -16,3 +16,11 @@
 local.properties
 .env
 debug.keystore
+
+.env.*
+!.env.example
+supabase/.temp/
+__pycache__/
+
+tests/artifacts/
+tests/.preflight.sql

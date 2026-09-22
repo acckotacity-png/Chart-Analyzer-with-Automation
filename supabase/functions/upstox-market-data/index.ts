@@ -1,175 +1,95 @@
-// Supabase Edge Function: upstox-market-data
-// Deploy command: supabase functions deploy upstox-market-data
-// 
-// IMPORTANT SECURITY RULE:
-// Upstox API Key, Secret, and Access Token are stored ONLY inside Supabase Secrets Vault!
-// NEVER expose them in GitHub or frontend JavaScript.
-//
-// Set secrets in Supabase CLI:
-// supabase secrets set UPSTOX_API_KEY="your-api-key"
-// supabase secrets set UPSTOX_API_SECRET="your-api-secret"
-// supabase secrets set UPSTOX_ACCESS_TOKEN="your-access-token"
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
-};
-
-// Instrument Key Mapping for Top Indian Equities (NSE)
-const INSTRUMENT_MAP: Record<string, string> = {
-  "RELIANCE": "NSE_EQ|INE002A01018",
-  "TCS": "NSE_EQ|INE467B01029",
-  "HDFCBANK": "NSE_EQ|INE040A01034",
-  "ICICIBANK": "NSE_EQ|INE090A01021",
-  "INFY": "NSE_EQ|INE009A01021",
-  "TATAMOTORS": "NSE_EQ|INE155A01022",
-  "TATASTEEL": "NSE_EQ|INE081A01020",
-  "SBIN": "NSE_EQ|INE062A01020",
-  "BHARTIARTL": "NSE_EQ|INE397D01024",
-  "ADANIENT": "NSE_EQ|INE423A01024",
-  "BAJFINANCE": "NSE_EQ|INE296A01024",
-  "WIPRO": "NSE_EQ|INE075A01022",
-  "ZOMATO": "NSE_EQ|INE758T01015",
-  "MARUTI": "NSE_EQ|INE585B01010"
-};
-
-serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  try {
-    const url = new URL(req.url);
-    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-
-    const action = body.action || url.searchParams.get("action") || "get_candles";
-    const symbol = (body.symbol || url.searchParams.get("symbol") || "RELIANCE").toUpperCase();
-    const timeframe = body.timeframe || url.searchParams.get("timeframe") || "1D";
-
-    // Retrieve sensitive secrets strictly from Supabase environment
-    const upstoxToken = Deno.env.get("UPSTOX_ACCESS_TOKEN");
-    const upstoxApiKey = Deno.env.get("UPSTOX_API_KEY");
-
-    // Map timeframe to Upstox API format
-    // Upstox formats: 1minute, 3minute, 5minute, 15minute, 30minute, day, week, month
-    let unit = "day";
-    let interval = "1";
-    if (timeframe === "1m") { unit = "1minute"; interval = "1"; }
-    else if (timeframe === "5m") { unit = "5minute"; interval = "5"; }
-    else if (timeframe === "15m") { unit = "15minute"; interval = "15"; }
-    else if (timeframe === "1h") { unit = "60minute"; interval = "60"; }
-    else { unit = "day"; interval = "1"; }
-
-    const instrumentKey = INSTRUMENT_MAP[symbol] || `NSE_EQ|${symbol}`;
-
-    // If Upstox token is available, query real Upstox V3 API
-    if (upstoxToken) {
-      const today = new Date().toISOString().split("T")[0];
-      const pastDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-      const upstoxUrl = `https://api.upstox.com/v2/historical-candle/${encodeURIComponent(instrumentKey)}/${unit}/${today}/${pastDate}`;
-
-      const res = await fetch(upstoxUrl, {
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${upstoxToken}`
-        }
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        // Upstox candle format: [timestamp, open, high, low, close, volume, open_interest]
-        const rawCandles = data.data?.candles || [];
-        
-        // Format for TradingView Lightweight Charts ({ time: 'YYYY-MM-DD' or unix, open, high, low, close, volume })
-        const formattedCandles = rawCandles.map((c: any[]) => {
-          const dt = new Date(c[0]);
-          const time = timeframe === "1D" 
-            ? dt.toISOString().split("T")[0] 
-            : Math.floor(dt.getTime() / 1000);
-
-          return {
-            time: time,
-            open: Number(c[1]),
-            high: Number(c[2]),
-            low: Number(c[3]),
-            close: Number(c[4]),
-            volume: Number(c[5]) || 0
-          };
-        }).reverse(); // Upstox gives newest first; Lightweight Charts needs oldest first
-
-        return new Response(JSON.stringify({
-          status: "success",
-          source: "upstox_v3_live",
-          symbol: symbol,
-          instrumentKey: instrumentKey,
-          timeframe: timeframe,
-          count: formattedCandles.length,
-          candles: formattedCandles
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    }
-
-    // Fallback: If Upstox Token is not set in Supabase Secrets yet, return authentic synthetic historical candles
-    // This allows seamless zero-downtime testing during developer onboarding
-    const fallbackCandles = generateRealisticCandles(symbol, timeframe, 120);
-
-    return new Response(JSON.stringify({
-      status: "success",
-      source: "supabase_relay_dev_mode",
-      note: "Set UPSTOX_ACCESS_TOKEN in Supabase Secrets for direct exchange ticks.",
-      symbol: symbol,
-      timeframe: timeframe,
-      count: fallbackCandles.length,
-      candles: fallbackCandles
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-
-  } catch (err: any) {
-    return new Response(JSON.stringify({
-      status: "error",
-      message: err.message || "Failed to process Upstox request"
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-});
-
-function generateRealisticCandles(symbol: string, timeframe: string, count: number) {
-  const basePrices: Record<string, number> = {
-    "RELIANCE": 1240, "TCS": 3480, "HDFCBANK": 1720, "ICICIBANK": 1285,
-    "INFY": 1840, "TATAMOTORS": 978, "TATASTEEL": 154, "SBIN": 842,
-    "BHARTIARTL": 1485, "ADANIENT": 2940, "BAJFINANCE": 7180, "WIPRO": 520,
-    "ZOMATO": 265, "MARUTI": 12350
-  };
-  let curPrice = basePrices[symbol] || 1000;
-  const candles = [];
-  const now = Date.now();
-  const stepMs = timeframe === "1m" ? 60000 : timeframe === "5m" ? 300000 : timeframe === "15m" ? 900000 : timeframe === "1h" ? 3600000 : 86400000;
-
-  for (let i = count; i >= 0; i--) {
-    const timeMs = now - (i * stepMs);
-    const dateObj = new Date(timeMs);
-    const change = (Math.random() - 0.48) * (curPrice * 0.015);
-    const open = curPrice;
-    const close = +(open + change).toFixed(2);
-    const high = +(Math.max(open, close) + Math.random() * (curPrice * 0.008)).toFixed(2);
-    const low = +(Math.min(open, close) - Math.random() * (curPrice * 0.008)).toFixed(2);
-    const volume = Math.floor(10000 + Math.random() * 85000);
-
-    const time = timeframe === "1D" 
-      ? dateObj.toISOString().split("T")[0] 
-      : Math.floor(timeMs / 1000);
-
-    candles.push({ time, open, high, low, close, volume });
-    curPrice = close;
-  }
-  return candles;
+// All market data comes from Upstox; no generated prices or user-supplied tokens.
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,x-client-info,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
+function reply(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});}
+let instruments: any[]=[];
+let instrumentsAt=0;
+async function resolveInstrument(symbol:string){
+ if(Date.now()-instrumentsAt>12*3600000 || !instruments.length){
+  const r=await fetch('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz',{signal:AbortSignal.timeout(20000)});
+  if(!r.ok) throw new Error('Instrument directory unavailable');
+  const bytes=new Uint8Array(await r.arrayBuffer());
+  const raw=bytes[0]===31 && bytes[1]===139 ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text() : new TextDecoder().decode(bytes);
+  const rows=JSON.parse(raw);
+  if(!Array.isArray(rows)) throw new Error('Invalid instrument directory');
+  instruments=rows.filter((x:any)=>x.segment==='NSE_EQ' && x.instrument_type==='EQ'); instrumentsAt=Date.now();
+ }
+ const item=instruments.find((x:any)=>x.trading_symbol===symbol);
+ if(!item?.instrument_key) throw new Error('NSE equity symbol not found; use the current exchange symbol');
+ return item;
 }
+function istDate(ms=Date.now()){return new Date(ms+19800000).toISOString().slice(0,10);}
+function normalize(rows:any[],daily:boolean){
+ const unique=new Map<string|number,any>();
+ for(const c of rows){
+  if(!Array.isArray(c)||c.length<6) throw new Error('Invalid broker candle');
+  const ms=Date.parse(c[0]); const [open,high,low,close,volume]=c.slice(1,6).map(Number);
+  if(![ms,open,high,low,close,volume].every(Number.isFinite)||open<=0||close<=0||low<=0||high<Math.max(open,close)||low>Math.min(open,close)||volume<0) throw new Error('Invalid broker candle');
+  const time=daily?String(c[0]).slice(0,10):Math.floor(ms/1000);
+  unique.set(time,{time,open,high,low,close,volume});
+ }
+ return [...unique.values()].sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
+}
+Deno.serve(async(req:Request)=>{
+ if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+ if(req.method!=='POST')return reply({message:'Use POST'},405);
+ try{
+  const authorization=req.headers.get('authorization');
+  if(!authorization?.startsWith('Bearer '))return reply({message:'Sign in required'},401);
+  const base=Deno.env.get('SUPABASE_URL');const anon=Deno.env.get('SUPABASE_ANON_KEY');
+  if(!base||!anon)return reply({message:'Supabase configuration missing'},503);
+  const headers={apikey:anon,Authorization:authorization};
+  const user=await fetch(base+'/auth/v1/user',{headers,signal:AbortSignal.timeout(10000)});
+  if(!user.ok)return reply({message:'Invalid session'},401);
+  const access=await fetch(base+'/rest/v1/rpc/has_active_access',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});
+  if(!access.ok || await access.json()!==true)return reply({message:'Admin approval and an unexpired plan are required'},403);
+  let body;try{body=await req.json();}catch{return reply({message:'Invalid JSON'},400);}
+  if(!body||typeof body!=='object'||Array.isArray(body))return reply({message:'Invalid request'},400);
+  const action=body.action||'get_snapshot';
+  if(!['ping','get_snapshot','get_candles','market_status'].includes(action))return reply({message:'Unsupported action'},400);
+  const token=Deno.env.get('UPSTOX_ACCESS_TOKEN');
+  if(action==='ping')return reply({status:'success',source:'upstox',configured:!!token});
+  if(!token)return reply({message:'Admin must configure UPSTOX_ACCESS_TOKEN in Supabase secrets'},503);
+  async function broker(path:string){
+   const res=await fetch('https://api.upstox.com'+path,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(15000)});
+   if(!res.ok)throw new Error('Broker request failed ('+res.status+'); check Upstox token and data entitlement');
+   const data=await res.json();if(data.status!=='success')throw new Error('Broker returned unsuccessful data');return data.data;
+  }
+  let market:any={status:'UNKNOWN',isOpen:false,checkedAt:new Date().toISOString()};
+  try{
+   const m=await broker('/v2/market/status/NSE');
+   const cas=m.cas_eligible_status?.status;
+   market={...market,status:m.status||'UNKNOWN',isOpen:m.status==='NORMAL_OPEN' && (!cas||cas==='NORMAL_OPEN'),statusChangedAt:m.last_updated,auctionStatus:cas||null};
+  }catch{market.message='Market status unavailable; automatic updates paused';}
+  if(action==='market_status'||(body.refresh===true&&!market.isOpen))return reply({status:'success',market,paused:true});
+  const symbol=typeof body.symbol==='string'?body.symbol.trim().toUpperCase():'';
+  if(!/^[A-Z0-9&._-]{1,30}$/.test(symbol))return reply({message:'Invalid symbol'},400);
+  const frames:Record<string,[string,number,number]>={'1m':['minutes',1,28],'5m':['minutes',5,28],'15m':['minutes',15,28],'1h':['hours',1,90],'1D':['days',1,180]};
+  const timeframe=body.timeframe||'1D';
+  if(!Object.hasOwn(frames,timeframe))return reply({message:'Unsupported timeframe'},400);
+  const instrument=await resolveInstrument(symbol);const key=encodeURIComponent(instrument.instrument_key);
+  const [unit,interval,days]=frames[timeframe];
+  const historyTo=istDate(Date.now()-86400000),from=istDate(Date.now()-days*86400000);
+  const [history,intraday,quotes]=await Promise.all([
+   broker('/v3/historical-candle/'+key+'/'+unit+'/'+interval+'/'+historyTo+'/'+from),
+   broker('/v3/historical-candle/intraday/'+key+'/'+(timeframe==='1D'?'minutes/1':unit+'/'+interval)),
+   broker('/v2/market-quote/quotes?instrument_key='+key)
+  ]);
+  if(!Array.isArray(history?.candles)||!Array.isArray(intraday?.candles))throw new Error('Invalid candle response');
+  let today=normalize(intraday.candles,false);
+  let candles=normalize(history.candles,timeframe==='1D');
+  if(timeframe==='1D'){
+   const groups=new Map<string,any>();
+   for(const c of today){const date=istDate(c.time*1000);const d=groups.get(date);if(d){d.high=Math.max(d.high,c.high);d.low=Math.min(d.low,c.low);d.close=c.close;d.volume+=c.volume;}else groups.set(date,{...c,time:date});}
+   today=[...groups.values()];
+  }
+  const merged=new Map(candles.map(c=>[c.time,c]));for(const c of today)merged.set(c.time,c);
+  candles=[...merged.values()].sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0).slice(-500);
+  if(!candles.length)throw new Error('No market candles available');
+  const q:any=Object.values(quotes).find((q:any)=>q.instrument_token===instrument.instrument_key);
+  const price=Number(q?.last_price);const ltt=Number(q?.last_trade_time);const change=Number(q?.net_change);
+  if(!q || !Number.isFinite(price)||price<=0||!Number.isFinite(ltt)||ltt<=0)throw new Error('Quote or exchange timestamp unavailable');
+  return reply({status:'success',source:'upstox',symbol,instrumentKey:instrument.instrument_key,timeframe,market,candles,
+   quote:{price,change:Number.isFinite(change)?change:null,previousClose:Number.isFinite(change)?price-change:null,lastTradeAt:new Date(ltt).toISOString(),fetchedAt:new Date().toISOString()},
+   candleAsOf:candles.at(-1)?.time,intervalSeconds:15});
+ }catch(error){return reply({message:error instanceof Error?error.message:'Market data unavailable'},502);}
+});

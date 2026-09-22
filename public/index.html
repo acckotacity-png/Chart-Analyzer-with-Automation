@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chart Analyzer Pro - AI Stock Screener & Real-Time Charts</title>
+  <title>Chart Analyzer Pro - Stock Screener & Historical Charts</title>
   <meta name="theme-color" content="#0b0f19">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://s3.tradingview.com/tv.js"></script>
+
+  <script src="vendor/lightweight-charts.js"></script>
+
   <style>
     :root {
       --bg: #080c14;
@@ -194,9 +194,120 @@
     }
 
     /* Shares Stock List & Interactive Chart */
-    .dashboard-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    .dashboard-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
     @media (max-width: 850px) {
-      .dashboard-layout { grid-template-columns: 1fr; }
+      .dashboard-layout { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    /* Dedicated Latency & Tick Debug Panel */
+    .debug-latency-panel {
+      grid-column: 1 / -1;
+      background: rgba(12, 18, 30, 0.95);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 2px;
+    }
+    .debug-latency-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .debug-latency-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+    .debug-stat-box {
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .debug-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .debug-stat-val {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: monospace;
+      color: var(--cyan);
+    }
+    .debug-stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .latency-good { color: var(--green) !important; }
+    .latency-warn { color: var(--amber) !important; }
+    .latency-bad { color: var(--red) !important; }
+
+    /* Interactive Drawing Tools Bar & Chart Canvas Overlay */
+    .drawing-toolbar-container {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(18, 26, 44, 0.95);
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+    }
+    .drawing-tool-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .drawing-tool-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(0, 229, 255, 0.08);
+    }
+    .drawing-tool-btn.active {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+    }
+    .chart-drawing-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 15;
+      pointer-events: none;
+      cursor: default;
+    }
+    .chart-drawing-canvas.drawing-active {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+    .drawing-badge-active {
+      background: rgba(0, 229, 255, 0.15) !important;
+      border-color: var(--cyan) !important;
+      color: var(--cyan) !important;
     }
 
     .stocks-list { display: flex; flex-direction: column; gap: 8px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
@@ -287,7 +398,7 @@
       border-color: var(--cyan);
     }
 
-    /* Key Indicators & AI Insight */
+    /* Key Indicators & Technical Insight */
     .indicator-pill {
       display: inline-flex;
       align-items: center;
@@ -404,7 +515,65 @@
       box-shadow: 0 10px 40px rgba(0, 229, 255, 0.2);
     }
 
+    /* Non-intrusive Toast Notification Container */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 360px;
+      pointer-events: none;
+    }
+    .toast-alert {
+      background: rgba(18, 26, 43, 0.95);
+      border: 1px solid var(--cyan);
+      border-left: 4px solid var(--cyan);
+      backdrop-filter: blur(8px);
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: var(--text);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .toast-alert.green {
+      border-left-color: var(--green);
+      border-color: rgba(0, 230, 118, 0.4);
+    }
+    .toast-alert.red {
+      border-left-color: var(--red);
+      border-color: rgba(255, 61, 113, 0.4);
+    }
+    @keyframes toastSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
     .hidden { display: none !important; }
+    .journal-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px }
+    .plan-setting { display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 }
+    button:disabled {opacity:0.45;cursor:not-allowed}
+    .dashboard-layout > *, .card { min-width: 0; }
+    #dataFeedBadge { max-width: 230px; overflow-wrap: anywhere; }
+    .timeframe-tabs { flex-wrap: wrap; }
+    @media (max-width: 600px) {
+      .dashboard-layout .card { padding: 12px; }
+      .dashboard-layout .card > div { max-width: 100%; }
+      #selectedStockPrice { font-size: 20px !important; }
+    }
   </style>
 </head>
 <body>
@@ -444,6 +613,7 @@
           <label>ईमेल आईडी (Email ID)</label>
           <input type="email" id="regEmail" class="form-control" placeholder="rahul@example.com" required>
         </div>
+        <div class="form-group"><label for="regPassword">Password</label><input id="regPassword" type="password" class="form-control" minlength="8" autocomplete="new-password" required></div>
         <button type="submit" class="btn" style="width: 100%;"><i class="fa-solid fa-paper-plane"></i> Request Admin Approval</button>
         <div class="switch-link" onclick="toggleAuth(false)">Already registered? Login / Check Status</div>
       </form>
@@ -451,20 +621,15 @@
       <!-- LOGIN FORM -->
       <form id="loginForm" class="hidden" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label>ईमेल या मोबाइल नंबर (Email or Phone)</label>
-          <input type="text" id="loginIdentifier" class="form-control" placeholder="arjunmalviya166@gmail.com" required>
+          <label>Email</label>
+          <input type="email" id="loginIdentifier" class="form-control" placeholder="arjunmalviya166@gmail.com" required>
         </div>
+        <div class="form-group"><label for="loginPassword">Password</label><input id="loginPassword" type="password" class="form-control" minlength="8" autocomplete="current-password" required></div>
         <button type="submit" class="btn" style="width: 100%;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Login / Status Check</button>
         <div class="switch-link" onclick="toggleAuth(true)">New user? Register with Name & Mobile</div>
       </form>
 
-      <!-- Quick Admin Login Link -->
-      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border);">
-        <button class="btn btn-secondary" style="font-size: 12px; width: 100%; padding: 10px;" onclick="adminQuickLogin()">
-          <i class="fa-solid fa-user-shield" style="color:var(--cyan)"></i> Quick Login as Admin (Arjun)
-        </button>
-      </div>
-
+      <p style="margin-top:12px">Prices and charts require an active Upstox connection. No sample prices are shown.</p>
       <div id="authAlert" style="margin-top: 14px; font-size: 13px; font-weight: 600;"></div>
     </div>
 
@@ -482,7 +647,12 @@
     </div>
 
     <!-- MAIN APP DASHBOARD (APPROVED USERS ONLY) -->
-    <div id="appDashboard" class="hidden">
+    <section id="accessPanel" class="card hidden">
+ <h2>Access plans</h2><p id="accessDetails"></p><div id="planChoices" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+ <p id="accessMessage" aria-live="polite"></p><small id="accessEventHistory"></small>
+</section>
+<div id="appDashboard" class="hidden">
+ <section class="card"><strong id="marketState" aria-live="polite">Awaiting broker connection</strong><p>Prices show the last exchange trade time. Market closed / status unavailable: automatic chart updates pause. Manual refresh fetches the last available broker data.</p></section>
       <!-- Admin Rights Panel (Visible only if user role == 'admin') -->
       <div id="adminPanel" class="card hidden" style="border-color: var(--cyan); margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -493,7 +663,7 @@
         </div>
         <p style="margin-top: 6px;">यहाँ सभी यूज़र्स की लिस्ट है। नए यूज़र्स को <b>Approve</b> करके तुरंत Rights दें:</p>
         
-        <div style="overflow-x: auto;">
+<div id="planSettings"></div><p id="adminMessage" aria-live="polite"></p>        <div style="overflow-x: auto;">
           <table class="user-table">
             <thead>
               <tr>
@@ -510,13 +680,129 @@
         </div>
       </div>
 
+<section class="card" id="journalPanel">
+ <h2>My trades & history</h2><p id="journalOwner"></p><p>Record purchases and sales you made with your broker. This form does not place orders.</p>
+ <form id="tradeForm" onsubmit="saveTrade(event)">
+ <input type="hidden" id="tradeId">
+ <div class="journal-grid">
+ <label>Symbol<input id="tradeSymbol" class="form-control" required maxlength="30" placeholder="RELIANCE"></label>
+ <label>Exchange<select id="tradeExchange" class="form-control"><option>NSE</option><option>BSE</option></select></label>
+ <label>Type<select id="tradeSide" class="form-control"><option>BUY</option><option>SELL</option></select></label>
+ <label>Trade date (IST)<input id="tradeDate" type="date" class="form-control" required></label>
+ <label>Quantity<input id="tradeQuantity" type="number" min="0.000001" max="1000000000" step="0.000001" class="form-control" required></label>
+ <label>Price per share (INR)<input id="tradePrice" type="number" min="0.000001" max="1000000000" step="0.000001" class="form-control" required></label>
+ <label>Total charges (INR)<input id="tradeFees" type="number" min="0" max="1000000000" step="0.01" value="0" class="form-control"></label>
+ <label>Notes<input id="tradeNotes" maxlength="2000" class="form-control" placeholder="Broker / reason / reference"></label>
+ </div><button id="tradeSave" type="submit" class="btn"><span id="tradeSaveLabel">Save trade</span></button> <button type="button" class="btn btn-secondary" onclick="cancelTradeEdit()">Clear</button>
+ </form>
+ <p id="journalMessage" aria-live="polite"></p><button class="btn btn-secondary" onclick="ownHistory()">My history / refresh</button> <button class="btn" onclick="exportTrades()">Download Excel (.xlsx)</button>
+ <div style="overflow:auto"><table class="user-table"><thead><tr><th>Date</th><th>Stock</th><th>Type</th><th>Qty</th><th>Price INR</th><th>Fees INR</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="tradeTableBody"></tbody></table></div>
+ <h3 style="margin-top:20px">Position summary</h3><p>Weighted-average cost including buy fees. Incomplete buy history is flagged; this is not a tax report.</p>
+ <div style="overflow:auto"><table class="user-table"><thead><tr><th>Stock</th><th>Net qty</th><th>Avg cost INR</th><th>Realized P&L INR</th><th>Review</th></tr></thead><tbody id="holdingsBody"></tbody></table></div>
+</section>
       <!-- MAIN SHARES AND CHART AREA -->
       <div class="dashboard-layout">
+        <!-- DEDICATED WEBSOCKET LATENCY & REAL-TIME TICK DEBUG UI PANEL -->
+        <div class="debug-latency-panel" id="wsLatencyDebugPanel" style="display:none">
+          <div class="debug-latency-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: rgba(0, 229, 255, 0.15); color: var(--cyan); font-size: 11px;">
+                <i class="fa-solid fa-network-wired"></i>
+              </span>
+              <div>
+                <span style="font-weight: 800; font-size: 13px; color: var(--text);">WebSocket Feed & System Latency Diagnostics</span>
+                <span style="font-size: 10px; color: var(--text-muted); margin-left: 6px;">(Server-Side vs Local Render Latency Profiler)</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span id="debugFeedModeBadge" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 230, 118, 0.12); color: var(--green); border: 1px solid rgba(0, 230, 118, 0.3); font-weight: 700;">
+                <i class="fa-solid fa-circle" style="font-size: 7px; margin-right: 4px;"></i> WS / TICK ACTIVE
+              </span>
+              <button onclick="toggleLatencyDebugPanel()" style="background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer;" title="Minimize / Hide Debug Panel">
+                <i class="fa-solid fa-chevron-up" id="btnToggleDebugIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="debug-latency-grid" id="debugLatencyGridBody">
+            <!-- Stat 1: Total End-to-End Latency -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Total E2E Latency</span>
+              <div class="debug-stat-val latency-good" id="dbgTotalLatency">-- ms</div>
+              <span class="debug-stat-sub" id="dbgLatencyVerdit">Analyzing tick delta...</span>
+            </div>
+
+            <!-- Stat 2: Server-Side Transit Delta -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Server / Network Transit</span>
+              <div class="debug-stat-val" id="dbgServerTransit">-- ms</div>
+              <span class="debug-stat-sub" id="dbgServerSub">Timestamp to arrival</span>
+            </div>
+
+            <!-- Stat 3: Local Processing & Render Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Local Processing & DOM</span>
+              <div class="debug-stat-val latency-good" id="dbgLocalProcess">-- ms</div>
+              <span class="debug-stat-sub">Parse → Calc → Chart update</span>
+            </div>
+
+            <!-- Stat 4: WebSocket Tick Arrival Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Tick Packet Timestamp</span>
+              <div class="debug-stat-val" style="font-size: 13px; color: var(--text);" id="dbgTickTimestamp">--:--:--.---</div>
+              <span class="debug-stat-sub" id="dbgTickOrigin">Exchange / Broker emit time</span>
+            </div>
+
+            <!-- Stat 5: Local Client Clock Time -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Client Local Time</span>
+              <div class="debug-stat-val" style="font-size: 13px; color: var(--text);" id="dbgClientTime">--:--:--.---</div>
+              <span class="debug-stat-sub">Browser high-res performance clock</span>
+            </div>
+
+            <!-- Stat 6: Last Tick Value & Ticks/Sec -->
+            <div class="debug-stat-box">
+              <span class="debug-stat-label">Tick Rate & Last LTP</span>
+              <div class="debug-stat-val" style="font-size: 14px; color: var(--green);" id="dbgLastTickVal">₹-- (0 tps)</div>
+              <span class="debug-stat-sub" id="dbgTicksReceived">0 ticks evaluated</span>
+            </div>
+          </div>
+
+          <!-- Drawing Tools Bar embedded in Debug Panel -->
+          <div class="drawing-toolbar-container" id="drawingToolbarStrip">
+            <span style="font-size: 11px; font-weight: 800; color: var(--cyan); display: flex; align-items: center; gap: 5px; margin-right: 4px;">
+              <i class="fa-solid fa-pen-ruler"></i> Chart Drawing Tools:
+            </span>
+            <button class="drawing-tool-btn" id="dtBtnToggle" onclick="toggleDrawingMode()" title="Enable or Disable Chart Drawing Mode">
+              <i class="fa-solid fa-draw-polygon"></i> <span id="dtToggleText">Enable Drawing</span>
+            </button>
+            <button class="drawing-tool-btn active" id="dtBtnTrendline" onclick="setDrawingTool('trendline')" title="Draw Diagonal Trendline (Click start & end point)">
+              <i class="fa-solid fa-chart-line"></i> Trendline
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnSupport" onclick="setDrawingTool('support')" title="Plot Horizontal Support Line (Green)">
+              <i class="fa-solid fa-grip-lines"></i> Support (Green)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnResistance" onclick="setDrawingTool('resistance')" title="Plot Horizontal Resistance Line (Red)">
+              <i class="fa-solid fa-grip-lines"></i> Resistance (Red)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnRay" onclick="setDrawingTool('ray')" title="Draw Ray Line extending forward">
+              <i class="fa-solid fa-arrow-trend-up"></i> Ray
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnClear" onclick="clearAllChartDrawings()" style="border-color: rgba(255, 61, 113, 0.4); color: var(--red);" title="Clear all user-drawn trendlines and levels">
+              <i class="fa-solid fa-trash-can"></i> Clear All (<span id="dtDrawingsCount">0</span>)
+            </button>
+            <button class="drawing-tool-btn" id="dtBtnExportPng" onclick="exportChartWithDrawingsToPng()" style="border-color: var(--green); color: var(--green); background: rgba(0, 230, 118, 0.08);" title="Save and download the current chart with trendlines and analysis as a high-resolution PNG image">
+              <i class="fa-solid fa-camera"></i> Export to PNG
+            </button>
+            <span id="dtHelpTip" style="font-size: 10px; color: var(--text-muted); margin-left: auto;">Click on the chart to start plotting</span>
+          </div>
+        </div>
+
         <!-- LEFT: SHARES LIST -->
         <div class="card" style="padding: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="font-size: 15px; margin-bottom: 0;"><i class="fa-solid fa-list-check"></i> Indian Shares (NSE)</h2>
-            <span class="live-tick-badge"><span class="live-dot"></span>LIVE</span>
+            <span class="live-tick-badge">BROKER DATA</span>
           </div>
           <p style="font-size: 11px; margin-bottom: 10px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
           
@@ -565,24 +851,33 @@
 
             <div style="text-align: right;">
               <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;"><span class="live-dot"></span>LIVE STREAM</span>
-                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹1,240.30</div>
+                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;">EXCHANGE DATA</span>
+                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">Unavailable</div>
               </div>
-              <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+14.80 (+1.21%)</div>
+              <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+17.40 (+1.42%)</div>
             </div>
           </div>
 
           <!-- Chart Controls Bar: Timeframes, Indicators, and Data Source -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <!-- Timeframe selector -->
-            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Timeframe:</span>
-              <div class="timeframe-tabs">
-                <button class="tab-btn" id="tf_1m" onclick="switchTimeframe('1m')">1m</button>
-                <button class="tab-btn" id="tf_5m" onclick="switchTimeframe('5m')">5m</button>
-                <button class="tab-btn" id="tf_15m" onclick="switchTimeframe('15m')">15m</button>
-                <button class="tab-btn" id="tf_1h" onclick="switchTimeframe('1h')">1h</button>
-                <button class="tab-btn active" id="tf_1D" onclick="switchTimeframe('1D')">1D</button>
+            <!-- Timeframe selector and Chart Mode Switcher -->
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 4px; background: var(--card-elevated); padding: 2px; border-radius: 6px; border: 1px solid var(--border);">
+                <button class="tab-btn active" id="btnModeCustom" onclick="switchChartMode('custom')" style="font-size: 11px; padding: 4px 8px;" title="Custom Analysis Engine with AI Insights">
+                  <i class="fa-solid fa-microchip"></i> Engine Chart
+                </button>
+                <button class="tab-btn" onclick="refreshMarket(true)">Refresh broker data</button>
+              </div>
+
+              <div id="timeframeTabsGroup" style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">TF:</span>
+                <div class="timeframe-tabs">
+                  <button class="tab-btn" id="tf_1m" onclick="switchTimeframe('1m')">1m</button>
+                  <button class="tab-btn" id="tf_5m" onclick="switchTimeframe('5m')">5m</button>
+                  <button class="tab-btn" id="tf_15m" onclick="switchTimeframe('15m')">15m</button>
+                  <button class="tab-btn" id="tf_1h" onclick="switchTimeframe('1h')">1h</button>
+                  <button class="tab-btn active" id="tf_1D" onclick="switchTimeframe('1D')">1D</button>
+                </div>
               </div>
             </div>
 
@@ -607,16 +902,29 @@
               <div class="indicator-pill active" id="pill_vol" onclick="toggleIndicator('volume')">
                 <i class="fa-solid fa-chart-simple" style="color:var(--cyan)"></i> Volume
               </div>
+              <button class="tab-btn" id="btnLatencyDebug" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleLatencyDebugPanel()" title="Toggle WebSocket & System Latency Diagnostics Panel">
+                <i class="fa-solid fa-stopwatch"></i> Latency Debug
+              </button>
+              <button class="tab-btn" id="btnDrawingToolsToggle" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleDrawingMode()" title="Toggle Manual Chart Trendline & S/R Drawing Mode">
+                <i class="fa-solid fa-pen-ruler"></i> Drawing Tools
+              </button>
+              <button class="tab-btn" id="btnSetAlert" disabled style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Alerts unavailable until a real-time data feed is implemented">
+                <i class="fa-solid fa-bell"></i> Set Alert
+              </button>
               <button class="tab-btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="openSupabaseModal()" title="Upstox API V3 & Supabase Edge Function Settings">
                 <i class="fa-solid fa-shield-halved"></i> Data Bridge
               </button>
             </div>
           </div>
 
-          <!-- TradingView Lightweight Chart Container -->
-          <div id="chartContainerWrapper" style="position: relative; height: 440px; width: 100%; border-radius: 10px; overflow: hidden; background: #0c121e; border: 1px solid var(--border);">
+          <!-- TradingView Lightweight Chart Container & Official TV Live Widget -->
+          <div id="chartContainerWrapper" style="position: relative; height: 460px; width: 100%; border-radius: 10px; overflow: hidden; background: #0c121e; border: 1px solid var(--border);">
             <div id="lightweight_chart_container" style="height: 100%; width: 100%;"></div>
+            <div id="official_tv_container" class="hidden" style="height: 100%; width: 100%; background: #0c121e;"></div>
             
+            <!-- Interactive User Drawing Canvas Overlay (Trendlines, S/R, Rays) -->
+            <canvas id="chartDrawingCanvas" class="chart-drawing-canvas"></canvas>
+
             <!-- Real-Time Crosshair & OHLC Legend Overlay -->
             <div id="chartLegend" style="position: absolute; top: 12px; left: 14px; z-index: 10; font-size: 11px; pointer-events: none; color: var(--text-muted); background: rgba(12, 18, 30, 0.85); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
               <span id="legendSymbol" style="font-weight: 800; color: var(--text);">RELIANCE</span>
@@ -627,7 +935,7 @@
             <!-- Upstox / Supabase Status Pill on Chart -->
             <div style="position: absolute; bottom: 10px; left: 14px; z-index: 10; font-size: 10px; color: var(--cyan); background: rgba(12, 18, 30, 0.85); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; gap: 5px;">
               <span class="live-dot"></span>
-              <span id="dataFeedBadge">Upstox V3 Market Relay • Supabase Edge Active</span>
+              <span id="dataFeedBadge">Historical data • Connection not verified</span>
             </div>
           </div>
 
@@ -759,7 +1067,7 @@
         </div>
 
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
-          🔒 <b>100% Secure Architecture:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
+          🔒 <b>Server-side broker credentials:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
         </p>
 
         <div class="form-group" style="margin-bottom: 12px;">
@@ -787,15 +1095,71 @@
         </div>
       </div>
     </div>
+
+    <!-- SET ALERT MODAL -->
+    <div id="setAlertModal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width: 440px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <h3 style="font-size: 16px; margin: 0; color: var(--amber); display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-bell"></i> Set Price Alert
+          </h3>
+          <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 12px;" onclick="closeSetAlertModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div style="background: var(--card-elevated); padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div id="alertStockSymbol" style="font-size: 16px; font-weight: 800; color: var(--text);">RELIANCE</div>
+            <div id="alertStockName" style="font-size: 11px; color: var(--text-muted);">Reliance Industries Ltd</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 10px; color: var(--text-muted);">Current Price</div>
+            <div id="alertCurrentPrice" style="font-size: 16px; font-weight: 800; color: var(--cyan);">₹1,240.30</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 11px;">Condition</label>
+          <select id="alertCondition" class="form-control" style="font-size: 12px;">
+            <option value="gte">Price crosses ABOVE or EQUAL (≥)</option>
+            <option value="lte">Price crosses BELOW or EQUAL (≤)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label style="font-size: 11px;">Target Threshold Price (₹)</label>
+          <input type="number" step="0.05" id="alertThresholdPrice" class="form-control" style="font-size: 13px; font-weight: 700;" placeholder="Enter target price">
+        </div>
+
+        <div id="activeAlertsListWrap" style="margin-bottom: 14px;">
+          <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 6px;">Active Alerts for this Stock:</label>
+          <div id="activeAlertsList" style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+            <!-- Rendered via JavaScript -->
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="flex: 1; font-size: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #d97706; color: #000; font-weight: 700;" onclick="saveStockAlert()">
+            <i class="fa-solid fa-check"></i> Set Alert
+          </button>
+          <button class="btn btn-secondary" style="font-size: 12px;" onclick="closeSetAlertModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NON-INTRUSIVE TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="toast-container"></div>
   </main>
 
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="vendor/exceljs.min.js"></script>
+  <script src="trading-core.js"></script>
   <script src="app.js"></script>
-  <script>
-    if (typeof SUPABASE_URL === 'undefined') {
-      const s = document.createElement('script');
-      s.src = 'public/app.js';
-      document.body.appendChild(s);
-    }
-  </script>
+  <script src="features.js"></script>
+
 </body>
 </html>

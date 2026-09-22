@@ -1,252 +1,106 @@
-// Supabase Credentials
-const SUPABASE_URL = "https://qhqbporwncgccpcgrurl.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFocWJwb3J3bmNnY2NwY2dydXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NjMxOTIsImV4cCI6MjEwNTUzOTE5Mn0.o0EgKYIv0JQSxJJftgIpZwFA49br7tgTNdSkSmgYwMs";
+// Supabase configuration is shared by authentication and the data bridge.
+const SUPABASE_URL = (window.APP_CONFIG?.supabaseUrl || "").replace(/\/$/, "");
+const SUPABASE_ANON = window.APP_CONFIG?.supabaseAnonKey || "";
+const authClient = SUPABASE_URL && SUPABASE_ANON && window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+let currentUser = null;
+localStorage.removeItem("app_user"); // Never trust legacy cached roles or approval status.
+function readStoredJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+async function sessionToken() {
+  if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+  const { data, error } = await authClient.auth.getSession();
+  if (error || !data.session) throw new Error("Please sign in again.");
+  return data.session.access_token;
+}
 
-let currentUser = JSON.parse(localStorage.getItem("app_user") || "null");
-
-// Indian Stock Data & Indicators (Real NSE India 2026 Reference Baseline synced with TradingView)
+// Symbol directory only. Prices come exclusively from authenticated broker responses.
 const STOCKS = [
   {
-    symbol: "RELIANCE",
-    tvSymbol: "NSE:RELIANCE",
-    name: "Reliance Industries Ltd",
-    price: 1243.80,
-    change: 17.40,
-    changePercent: 1.42,
-    rsi: 58.4,
-    ema20: 1230.50,
-    sma50: 1218.00,
-    macd: "Bullish +3.2",
-    signal: "STRONG BUY",
-    aiText: "Reliance Industries ₹1,243.80 (+1.42%) के स्तर पर 20 EMA से ऊपर मजबूत अपट्रेंड में ट्रेड कर रहा है। वॉल्यूम 7.97M के साथ बुलिश मोमेंटम जारी है।",
-    chartData: [1220, 1225, 1230, 1228, 1236, 1240, 1243.80]
+    "symbol": "RELIANCE",
+    "name": "Reliance Industries Ltd",
+    "tvSymbol": "NSE:RELIANCE"
   },
   {
-    symbol: "BHARTIARTL",
-    tvSymbol: "NSE:BHARTIARTL",
-    name: "Bharti Airtel Ltd",
-    price: 1829.00,
-    change: -64.40,
-    changePercent: -3.40,
-    rsi: 46.2,
-    ema20: 1850.00,
-    sma50: 1810.00,
-    macd: "Bearish -4.1",
-    signal: "BUY",
-    aiText: "भारती एयरटेल ₹1,829.00 (-3.40%) के स्तर पर प्रमुख 50 SMA सपोर्ट के पास कंसोलिडेट कर रहा है। लॉन्ग-टर्म बायर्स के लिए अनुकूल स्तर।",
-    chartData: [1890, 1880, 1865, 1850, 1835, 1820, 1829.00]
+    "symbol": "BHARTIARTL",
+    "name": "Bharti Airtel Ltd",
+    "tvSymbol": "NSE:BHARTIARTL"
   },
   {
-    symbol: "HDFCBANK",
-    tvSymbol: "NSE:HDFCBANK",
-    name: "HDFC Bank Ltd",
-    price: 741.65,
-    change: 10.70,
-    changePercent: 1.46,
-    rsi: 59.4,
-    ema20: 732.00,
-    sma50: 724.00,
-    macd: "Bullish +2.8",
-    signal: "STRONG BUY",
-    aiText: "HDFC Bank 28.11M उच्च वॉल्यूम के साथ ₹741.65 (+1.46%) पर मजबूत संस्थागत बाइंग फ्लो दिखा रहा है। सपोर्ट ₹732 पर बना है।",
-    chartData: [722, 726, 730, 735, 738, 739, 741.65]
+    "symbol": "HDFCBANK",
+    "name": "HDFC Bank Ltd",
+    "tvSymbol": "NSE:HDFCBANK"
   },
   {
-    symbol: "ICICIBANK",
-    tvSymbol: "NSE:ICICIBANK",
-    name: "ICICI Bank Ltd",
-    price: 1344.90,
-    change: 6.00,
-    changePercent: 0.45,
-    rsi: 62.8,
-    ema20: 1335.00,
-    sma50: 1315.00,
-    macd: "Bullish +4.8",
-    signal: "STRONG BUY",
-    aiText: "ICICI Bank ₹1,344.90 (+0.45%) पर नए ऑल-टाइम हाई स्तरों के पास ट्रेड कर रहा है। बैंकिंग इंडेक्स में लगातार लीडरशिप।",
-    chartData: [1310, 1320, 1328, 1335, 1340, 1342, 1344.90]
+    "symbol": "ICICIBANK",
+    "name": "ICICI Bank Ltd",
+    "tvSymbol": "NSE:ICICIBANK"
   },
   {
-    symbol: "SBIN",
-    tvSymbol: "NSE:SBIN",
-    name: "State Bank of India",
-    price: 995.50,
-    change: -0.70,
-    changePercent: -0.07,
-    rsi: 58.1,
-    ema20: 988.50,
-    sma50: 975.00,
-    macd: "Neutral +1.3",
-    signal: "BUY",
-    aiText: "State Bank of India (SBI) ₹995.50 के स्तर पर ₹1,000 के ऐतिहासिक माइलस्टोन के करीब कंसोलिडेट कर रहा है।",
-    chartData: [970, 982, 988, 992, 998, 994, 995.50]
+    "symbol": "SBIN",
+    "name": "State Bank of India",
+    "tvSymbol": "NSE:SBIN"
   },
   {
-    symbol: "TCS",
-    tvSymbol: "NSE:TCS",
-    name: "Tata Consultancy Services",
-    price: 2136.60,
-    change: 31.60,
-    changePercent: 1.50,
-    rsi: 54.8,
-    ema20: 2115.00,
-    sma50: 2095.00,
-    macd: "Bullish +5.2",
-    signal: "BUY",
-    aiText: "TCS ₹2,136.60 (+1.50%) के स्तर पर फ्रेश ब्रेकआउट प्रदर्शित कर रहा है। IT सेक्टर में बाइंग इंटरेस्ट सुरक्षित है।",
-    chartData: [2095, 2105, 2110, 2118, 2125, 2130, 2136.60]
+    "symbol": "TCS",
+    "name": "Tata Consultancy Services",
+    "tvSymbol": "NSE:TCS"
   },
   {
-    symbol: "BAJFINANCE",
-    tvSymbol: "NSE:BAJFINANCE",
-    name: "Bajaj Finance Ltd",
-    price: 1025.40,
-    change: -14.90,
-    changePercent: -1.43,
-    rsi: 45.8,
-    ema20: 1040.00,
-    sma50: 1015.00,
-    macd: "Neutral -0.6",
-    signal: "BUY",
-    aiText: "बजाज फाइनेंस (स्टॉक विभाजन उपरांत) ₹1,025.40 पर प्रमुख सपोर्ट जोन के निकट ट्रेड कर रहा है।",
-    chartData: [1045, 1040, 1035, 1030, 1022, 1028, 1025.40]
+    "symbol": "BAJFINANCE",
+    "name": "Bajaj Finance Ltd",
+    "tvSymbol": "NSE:BAJFINANCE"
   },
   {
-    symbol: "LT",
-    tvSymbol: "NSE:LT",
-    name: "Larsen & Toubro Ltd",
-    price: 3900.40,
-    change: 15.50,
-    changePercent: 0.40,
-    rsi: 61.5,
-    ema20: 3860.00,
-    sma50: 3810.00,
-    macd: "Bullish +14.4",
-    signal: "BUY",
-    aiText: "इन्फ्रास्ट्रक्चर दिग्गज L&T ₹3,900.40 (+0.40%) पर मजबूत ऑर्डर बुक और विदेशी निवेश के साथ निरंतर अपट्रेंड में है।",
-    chartData: [3820, 3845, 3860, 3875, 3890, 3895, 3900.40]
+    "symbol": "LT",
+    "name": "Larsen & Toubro Ltd",
+    "tvSymbol": "NSE:LT"
   },
   {
-    symbol: "INFY",
-    tvSymbol: "NSE:INFY",
-    name: "Infosys Ltd",
-    price: 1038.80,
-    change: -12.60,
-    changePercent: -1.20,
-    rsi: 48.6,
-    ema20: 1055.00,
-    sma50: 1040.00,
-    macd: "Neutral -1.2",
-    signal: "BUY",
-    aiText: "Infosys ₹1,038.80 पर 50 SMA सपोर्ट के पास है। 4.58M वॉल्यूम के साथ वैल्यू बाइंग स्तरों पर उपलब्ध।",
-    chartData: [1060, 1055, 1048, 1042, 1035, 1036, 1038.80]
+    "symbol": "INFY",
+    "name": "Infosys Ltd",
+    "tvSymbol": "NSE:INFY"
   },
   {
-    symbol: "TATAMOTORS",
-    tvSymbol: "NSE:TATAMOTORS",
-    name: "Tata Motors Ltd",
-    price: 442.90,
-    change: 5.40,
-    changePercent: 1.23,
-    rsi: 62.4,
-    ema20: 438.20,
-    sma50: 428.00,
-    macd: "Strong Bullish +3.5",
-    signal: "STRONG BUY",
-    aiText: "Tata Motors डिमर्जर व नए ईवी वॉल्यूम के साथ ₹442.90 पर मजबूत अपट्रेंड में है। सपोर्ट ₹435 पर बना हुआ है।",
-    chartData: [425, 430, 434, 438, 436, 440, 442.90]
+    "symbol": "TATAMOTORS",
+    "name": "Tata Motors Ltd",
+    "tvSymbol": "NSE:TATAMOTORS"
   },
   {
-    symbol: "TATASTEEL",
-    tvSymbol: "NSE:TATASTEEL",
-    name: "Tata Steel Ltd",
-    price: 154.20,
-    change: 2.35,
-    changePercent: 1.55,
-    rsi: 59.2,
-    ema20: 151.80,
-    sma50: 148.50,
-    macd: "Bullish +1.4",
-    signal: "BUY",
-    aiText: "मेटल सेक्टर में उछाल से Tata Steel अपने प्रमुख सपोर्ट स्तरों से ऊपर मजबूत स्थिति में है।",
-    chartData: [148, 150, 149, 152, 153, 154.20]
+    "symbol": "TATASTEEL",
+    "name": "Tata Steel Ltd",
+    "tvSymbol": "NSE:TATASTEEL"
   },
   {
-    symbol: "ITC",
-    tvSymbol: "NSE:ITC",
-    name: "ITC Limited",
-    price: 492.15,
-    change: 3.25,
-    changePercent: 0.66,
-    rsi: 54.3,
-    ema20: 488.00,
-    sma50: 482.50,
-    macd: "Neutral +1.2",
-    signal: "HOLD",
-    aiText: "ITC मजबूत डिविडेंड यील्ड और स्थिर वॉल्यूम के साथ साइडवेज़ ट्रेंड दिखा रहा है।",
-    chartData: [482, 485, 487, 484, 490, 489, 492.15]
+    "symbol": "ITC",
+    "name": "ITC Limited",
+    "tvSymbol": "NSE:ITC"
   },
   {
-    symbol: "ADANIENT",
-    tvSymbol: "NSE:ADANIENT",
-    name: "Adani Enterprises Ltd",
-    price: 2940.00,
-    change: 42.00,
-    changePercent: 1.45,
-    rsi: 61.2,
-    ema20: 2890.00,
-    sma50: 2820.00,
-    macd: "Bullish +11.2",
-    signal: "BUY",
-    aiText: "अडानी एंटरप्राइजेज में उच्च वॉल्यूम के साथ ब्रेकआउट देखा जा रहा है। 20 EMA पर सपोर्ट है।",
-    chartData: [2810, 2840, 2870, 2890, 2915, 2940.00]
+    "symbol": "ADANIENT",
+    "name": "Adani Enterprises Ltd",
+    "tvSymbol": "NSE:ADANIENT"
   },
   {
-    symbol: "WIPRO",
-    tvSymbol: "NSE:WIPRO",
-    name: "Wipro Ltd",
-    price: 520.40,
-    change: 6.20,
-    changePercent: 1.21,
-    rsi: 55.4,
-    ema20: 512.00,
-    sma50: 504.00,
-    macd: "Bullish +2.8",
-    signal: "BUY",
-    aiText: "विप्रो में निचले स्तरों से अच्छी रिकवरी देखी जा रही है। स्टॉपलॉस ₹508 रखें।",
-    chartData: [502, 506, 510, 514, 518, 520.40]
+    "symbol": "WIPRO",
+    "name": "Wipro Ltd",
+    "tvSymbol": "NSE:WIPRO"
   },
   {
-    symbol: "ZOMATO",
-    tvSymbol: "NSE:ZOMATO",
-    name: "Zomato Ltd",
-    price: 265.80,
-    change: 5.40,
-    changePercent: 2.07,
-    rsi: 69.5,
-    ema20: 255.00,
-    sma50: 242.00,
-    macd: "Strong Bullish +6.1",
-    signal: "STRONG BUY",
-    aiText: "जोमैटो मजबूत तिमाही नतीजों के बाद अपने 52-वीक हाई के नजदीक ट्रेड कर रहा है।",
-    chartData: [240, 245, 252, 258, 262, 265.80]
+    "symbol": "ETERNAL",
+    "name": "Zomato Ltd",
+    "tvSymbol": "NSE:ZOMATO"
   },
   {
-    symbol: "MARUTI",
-    tvSymbol: "NSE:MARUTI",
-    name: "Maruti Suzuki India Ltd",
-    price: 12350.00,
-    change: 120.00,
-    changePercent: 0.98,
-    rsi: 60.1,
-    ema20: 12180.00,
-    sma50: 12050.00,
-    macd: "Bullish +32.0",
-    signal: "BUY",
-    aiText: "मारुति सुजुकी ऑटो इंडेक्स में लीडरशिप बनाए हुए है। सपोर्ट ₹12,150 पर बना हुआ है।",
-    chartData: [12010, 12090, 12150, 12220, 12280, 12350.00]
+    "symbol": "MARUTI",
+    "name": "Maruti Suzuki India Ltd",
+    "tvSymbol": "NSE:MARUTI"
   }
-];
+].map(s => ({...s, price: NaN, change: NaN, changePercent: null}));
 
 // Upstox V3 Instrument Keys for Real-Time WebSocket Feeds
 const UPSTOX_INSTRUMENT_KEYS = {
@@ -275,17 +129,13 @@ let restReconciliationInterval = null;
 let lastValidatedPrice = null;
 let upstoxWebSocket = null;
 let wsReconnectTimeout = null;
-let priceAlerts = JSON.parse(localStorage.getItem("stock_price_alerts") || "[]");
+let priceAlerts = []; // Legacy device-global alerts are disabled.
 let currentStockSearchQuery = "";
-let currentChartMode = "tradingview";
+let currentChartMode = "custom";
 
 // Initialize on load (handle both interactive/complete and DOMContentLoaded)
 function initApp() {
-  if (currentUser) {
-    checkActiveStatus();
-  } else {
-    showView("auth");
-  }
+  checkActiveStatus();
 }
 
 if (document.readyState === "loading") {
@@ -302,143 +152,96 @@ function toggleAuth(showRegister) {
 
 async function handleRegister(e) {
   e.preventDefault();
-  const name = document.getElementById("regName").value.trim();
-  const mobile = document.getElementById("regMobile").value.trim();
-  const email = document.getElementById("regEmail").value.trim().toLowerCase();
-  const alertBox = document.getElementById("authAlert");
-
-  alertBox.style.color = "var(--cyan)";
-  alertBox.innerText = "Submitting registration request to Supabase...";
-
+  const box = document.getElementById("authAlert");
   try {
-    const checkResp = await fetch(`${SUPABASE_URL}/rest/v1/app_users?email=eq.${email}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
+    if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+    const { data, error } = await authClient.auth.signUp({
+      email: document.getElementById("regEmail").value.trim().toLowerCase(),
+      password: document.getElementById("regPassword").value,
+      options: { data: {
+        full_name: document.getElementById("regName").value.trim(),
+        mobile_number: document.getElementById("regMobile").value.trim()
+      } }
     });
-    const existing = await checkResp.json();
-    if (existing && existing.length > 0) {
-      currentUser = existing[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-      return;
-    }
-
-    const insertResp = await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
-      method: "POST",
-      headers: {
-        "apikey": SUPABASE_ANON,
-        "Authorization": `Bearer ${SUPABASE_ANON}`,
-        "Content-Type": "application/json",
-        "Prefer": "return=representation"
-      },
-      body: JSON.stringify({
-        full_name: name,
-        mobile_number: mobile,
-        email: email,
-        status: "pending",
-        role: "user"
-      })
-    });
-
-    const data = await insertResp.json();
-    if (insertResp.ok && data && data.length > 0) {
-      currentUser = data[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-    } else {
-      alertBox.style.color = "var(--red)";
-      alertBox.innerText = "Error registering user: " + (data.message || "Please check details");
-    }
-  } catch (err) {
-    alertBox.style.color = "var(--red)";
-    alertBox.innerText = "Network error: " + err.message;
-  }
+    if (error) throw error;
+    document.getElementById("regPassword").value = "";
+    if (data.session) await checkActiveStatus();
+    else box.textContent = "Check your email to confirm registration, then sign in. Admin approval is also required.";
+  } catch (error) { box.textContent = error.message; }
 }
 
 async function handleLogin(e) {
   e.preventDefault();
-  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
-  const alertBox = document.getElementById("authAlert");
-
-  alertBox.style.color = "var(--cyan)";
-  alertBox.innerText = "Verifying with Supabase...";
-
-  const query = identifier.includes("@") ? `email=eq.${identifier}` : `mobile_number=eq.${identifier}`;
-
+  const box = document.getElementById("authAlert");
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?${query}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
+    if (!authClient) throw new Error("Configure the new Supabase project in config.js first.");
+    const { error } = await authClient.auth.signInWithPassword({
+      email: document.getElementById("loginIdentifier").value.trim().toLowerCase(),
+      password: document.getElementById("loginPassword").value
     });
-    const users = await res.json();
-    if (users && users.length > 0) {
-      currentUser = users[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-      checkActiveStatus();
-    } else {
-      alertBox.style.color = "var(--red)";
-      alertBox.innerText = "User record not found. Please register first.";
-    }
-  } catch (err) {
-    alertBox.style.color = "var(--red)";
-    alertBox.innerText = "Login error: " + err.message;
-  }
-}
-
-function adminQuickLogin() {
-  document.getElementById("loginIdentifier").value = "arjunmalviya166@gmail.com";
-  toggleAuth(false);
-  handleLogin({ preventDefault: () => {} });
+    if (error) throw error;
+    document.getElementById("loginPassword").value = "";
+    await checkActiveStatus();
+  } catch (error) { box.textContent = error.message; }
 }
 
 async function checkActiveStatus() {
-  if (!currentUser) {
+  try {
+    if (!authClient) throw new Error("Set your new Supabase URL and public key in config.js.");
+    const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session) { currentUser = null; stopLivePriceStream(); document.getElementById("accessPanel").classList.add("hidden"); showView("auth"); return; }
+    const { data, error } = await authClient.auth.getUser();
+    if (error || !data.user) throw error || new Error("Please sign in again.");
+    const { data: profile, error: profileError } = await authClient.from("app_users")
+      .select("*").eq("id", data.user.id).single();
+    if (profileError || !profile) throw profileError || new Error("Profile is unavailable.");
+    currentUser = profile;
+  } catch (error) {
+    currentUser = null;
+    stopLivePriceStream();
     showView("auth");
+    document.getElementById("userHeader").classList.add("hidden");
+    document.getElementById("authAlert").textContent = error.message;
     return;
   }
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${currentUser.id}&select=*`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
-    });
-    const users = await res.json();
-    if (users && users.length > 0) {
-      currentUser = users[0];
-      localStorage.setItem("app_user", JSON.stringify(currentUser));
-    }
-  } catch (e) {
-    console.warn("Could not refresh live status", e);
-  }
-
+  loadAccessPanel();
   // Update Header
   document.getElementById("userHeader").classList.remove("hidden");
   document.getElementById("headerUserName").innerText = currentUser.full_name;
-  
+
   const statusBadge = document.getElementById("headerUserStatus");
   statusBadge.innerText = currentUser.status;
   statusBadge.className = `badge ${currentUser.status}`;
 
-  if (currentUser.status === "approved") {
+  if (hasActiveAccess()) {
     showView("dashboard");
+    tradeOwner = currentUser.id;
+    cancelTradeEdit();
+    loadTradeHistory();
     if (currentUser.role === "admin") {
       document.getElementById("adminPanel").classList.remove("hidden");
       loadAdminUsers();
     } else {
       document.getElementById("adminPanel").classList.add("hidden");
     }
-    
+
     // Defer chart canvas initialization until after the dashboard view is fully displayed and measured
     requestAnimationFrame(() => {
       initDashboardShares();
     });
   } else {
+    stopLivePriceStream();
     showView("pending");
-    document.getElementById("pendingMessage").innerText = 
-      `नमस्ते ${currentUser.full_name}, आपकी रिक्वेस्ट (Mobile: ${currentUser.mobile_number}, Email: ${currentUser.email}) एडमिन के पास पहुँच गई है। एडमिन द्वारा Rights (Approval) देने के बाद ही आप शेयर्स और लाइव चार्ट देख सकेंगे।`;
+    document.getElementById("pendingMessage").innerText =
+      `नमस्ते ${currentUser.full_name}, access pending, expired or revoked. Request a plan below; admin approval is required.`;
   }
 }
 
 function initDashboardShares() {
   // Security guard: ensure user is authenticated and approved
-  if (!currentUser || currentUser.status !== "approved") {
+  if (!currentUser || !hasActiveAccess()) {
     console.warn("Unauthorized attempt to initialize chart and share data.");
     destroyActiveChart();
     showView("auth");
@@ -448,7 +251,6 @@ function initDashboardShares() {
   populateQuickStockDropdown();
   renderSharesList();
   renderSelectedStock(selectedStock);
-  startLivePriceStream();
 }
 
 function populateQuickStockDropdown() {
@@ -458,7 +260,7 @@ function populateQuickStockDropdown() {
   STOCKS.forEach(stock => {
     const opt = document.createElement("option");
     opt.value = stock.symbol;
-    opt.innerText = `${stock.symbol} (₹${stock.price.toFixed(0)})`;
+    opt.innerText = stock.symbol;
     if (selectedStock && stock.symbol === selectedStock.symbol) {
       opt.selected = true;
     }
@@ -515,21 +317,7 @@ function addAndSelectCustomStock(symbolInput) {
     return;
   }
 
-  const newStock = {
-    symbol: sym,
-    tvSymbol: `NSE:${sym}`,
-    name: `${sym} (NSE Live)`,
-    price: 1000.00,
-    change: 12.50,
-    changePercent: 1.25,
-    rsi: 58.0,
-    ema20: 985.00,
-    sma50: 970.00,
-    macd: "Bullish +2.5",
-    signal: "BUY",
-    aiText: `${sym} का लाइव NSE चार्ट लोड हो गया है। ट्रेडिंगव्यू रियल-टाइम कैंडल्स और मार्केट वॉल्यूम सीधे NSE सर्वर से आ रहे हैं।`,
-    chartData: [960, 970, 985, 990, 995, 1000]
-  };
+  const newStock = { symbol: sym, name: sym, tvSymbol: `NSE:${sym}`, price: NaN, change: NaN, changePercent: null };
   STOCKS.unshift(newStock);
   populateQuickStockDropdown();
   clearStockSearch();
@@ -548,7 +336,7 @@ function clearStockSearch() {
 }
 
 function renderSharesList() {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   const container = document.getElementById("stocksListContainer");
   if (!container) return;
   container.innerHTML = "";
@@ -565,7 +353,7 @@ function renderSharesList() {
     container.innerHTML = `
       <div style="text-align: center; padding: 18px 10px; color: var(--text-muted); font-size: 13px;">
         <i class="fa-solid fa-circle-exclamation" style="font-size: 22px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
-        <span>"${currentStockSearchQuery}" प्रीसेट लिस्ट में नहीं है</span>
+        <span>"${escapeHtml(currentStockSearchQuery)}" प्रीसेट लिस्ट में नहीं है</span>
       </div>
       ${cleanQ ? `
         <div class="direct-search-banner" onclick="addAndSelectCustomStock('${cleanQ}')">
@@ -592,12 +380,12 @@ function renderSharesList() {
     div.innerHTML = `
       <div class="stock-row-top">
         <span class="stock-symbol">${stock.symbol}</span>
-        <span class="stock-price" id="listPrice_${stock.symbol}">₹${stock.price.toFixed(2)}</span>
+        <span class="stock-price" id="listPrice_${stock.symbol}">${Number.isFinite(stock.price) ? money(stock.price) : "—"}</span>
       </div>
       <div class="stock-row-sub">
         <span>${stock.name.substring(0, 22)}</span>
         <span class="stock-change ${isPositive ? 'positive' : 'negative'}" id="listChange_${stock.symbol}">
-          ${isPositive ? '+' : ''}${stock.change.toFixed(2)} (${isPositive ? '+' : ''}${stock.changePercent}%)
+          ${Number.isFinite(stock.change) ? money(stock.change) + " (" + stock.changePercent + "%)" : "No quote"}
         </span>
       </div>
     `;
@@ -624,7 +412,7 @@ function renderSharesList() {
 }
 
 function selectStock(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   selectedStock = stock;
   lastValidatedPrice = stock.price;
   renderSharesList();
@@ -633,53 +421,19 @@ function selectStock(stock) {
   if (quickSelect) {
     quickSelect.value = stock.symbol;
   }
-  subscribeToCurrentStock();
+
   renderActiveAlertsList();
   // Trigger immediate REST market price reconciliation on stock selection switch
-  reconcileMarketPrice();
+
 }
 
 function renderSelectedStock(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
-  document.getElementById("selectedStockSymbol").innerText = stock.symbol;
-  document.getElementById("selectedStockName").innerText = stock.name;
-  
-  const isPos = stock.change >= 0;
-  const priceElem = document.getElementById("selectedStockPrice");
-  priceElem.innerText = `₹${stock.price.toFixed(2)}`;
-  priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-  const changeElem = document.getElementById("selectedStockChange");
-  changeElem.innerText = `${isPos ? '+' : ''}${stock.change.toFixed(2)} (${isPos ? '+' : ''}${stock.changePercent}%)`;
-  changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-  // Signal Badge
-  const signalBadge = document.getElementById("signalBadge");
-  signalBadge.innerText = stock.signal;
-  signalBadge.className = `badge ${stock.signal.includes("BUY") ? "approved" : "pending"}`;
-
-  // Indicators
-  document.getElementById("indRsi").innerText = stock.rsi;
-  document.getElementById("indEma").innerText = `₹${stock.ema20.toFixed(2)}`;
-  document.getElementById("indSma").innerText = `₹${stock.sma50.toFixed(2)}`;
-  document.getElementById("indMacd").innerText = stock.macd;
-
-  // AI Insight Text
-  const aiInsightElem = document.getElementById("aiInsightText");
-  if (aiInsightElem) aiInsightElem.innerText = stock.aiText;
-
-  // Update quick stock select dropdown if present
-  const quickSelect = document.getElementById("quickStockSelect");
-  if (quickSelect && quickSelect.value !== stock.symbol) {
-    quickSelect.value = stock.symbol;
-  }
-
-  // Load Stock via Upstox / Supabase service and render in TradingView Lightweight Charts or Official TV Widget
-  if (currentChartMode === "tvlive") {
-    renderOfficialTradingViewWidget(stock);
-  } else {
-    loadStockChartAndAnalysis(stock);
-  }
+ if (!hasActiveAccess()) return;
+ document.getElementById('selectedStockSymbol').textContent=stock.symbol;
+ document.getElementById('selectedStockName').textContent=stock.name;
+ const quick=document.getElementById('quickStockSelect');if(quick)quick.value=stock.symbol;
+ if(!lwChart)initLightweightChart();
+ onMarketSelection();
 }
 
 // -------------------------------------------------------------
@@ -718,6 +472,8 @@ function initLightweightChart() {
       console.warn("Chart remove err:", e);
     }
     lwChart = null;
+    candleSeries = volumeSeries = emaSeries = smaSeries = vwapSeries = bbUpperSeries = bbLowerSeries = null;
+    activeSrLines = [];
   }
   container.innerHTML = "";
 
@@ -1292,7 +1048,7 @@ async function exportChartWithDrawingsToPng() {
     ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
     ctx.textAlign = "right";
     const dateStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    ctx.fillText(`Upstox V3 Live • ${dateStr} IST`, width - 16, height - 12);
+    ctx.fillText(`Historical chart • ${dateStr} IST`, width - 16, height - 12);
     ctx.restore();
 
     // 5. Convert to Blob & trigger browser download
@@ -1335,120 +1091,7 @@ async function exportChartWithDrawingsToPng() {
 // UPSTOX API V3 + SUPABASE EDGE RELAY SERVICE
 // -------------------------------------------------------------
 const UpstoxSupabaseService = {
-  getFunctionUrl() {
-    return localStorage.getItem("upstox_supabase_url") || "";
-  },
-  getAnonKey() {
-    return localStorage.getItem("upstox_supabase_anon") || (typeof SUPABASE_ANON !== "undefined" ? SUPABASE_ANON : "");
-  },
-  async fetchCandles(symbol, timeframe) {
-    const url = this.getFunctionUrl();
-    if (url) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": this.getAnonKey()
-          },
-          body: JSON.stringify({ symbol, timeframe })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.candles && json.candles.length > 0) {
-            updateDataFeedBadge("Upstox V3 Live • Supabase Edge Active");
-            return json.candles;
-          }
-        }
-      } catch (e) {
-        console.warn("Supabase Edge ping error, fallback to simulated relay:", e);
-      }
-    }
-    // High-performance realistic Indian stock candle generator
-    updateDataFeedBadge("Upstox V3 Market Relay • Supabase Edge Active");
-    return this.generateRealisticCandles(symbol, timeframe, 120);
-  },
-  generateRealisticCandles(symbol, timeframe, count) {
-    const basePrices = {
-      RELIANCE: 1243.80, BHARTIARTL: 1829.00, HDFCBANK: 741.65, ICICIBANK: 1344.90,
-      SBIN: 995.50, TCS: 2136.60, BAJFINANCE: 1025.40, LT: 3900.40,
-      INFY: 1038.80, TATAMOTORS: 442.90, TATASTEEL: 154.20, ITC: 492.15,
-      ADANIENT: 2940.00, WIPRO: 520.40, ZOMATO: 265.80, MARUTI: 12350.00
-    };
-    let curPrice = basePrices[symbol] || (selectedStock ? selectedStock.price : 1000);
-    const candles = [];
-    const now = Date.now();
-    const stepMs = timeframe === "1m" ? 60000 : timeframe === "5m" ? 300000 : timeframe === "15m" ? 900000 : timeframe === "1h" ? 3600000 : 86400000;
-
-    for (let i = count; i >= 0; i--) {
-      const timeMs = now - (i * stepMs);
-      const dateObj = new Date(timeMs);
-      const change = (Math.random() - 0.48) * (curPrice * 0.015);
-      const open = curPrice;
-      const close = +(open + change).toFixed(2);
-      const high = +(Math.max(open, close) + Math.random() * (curPrice * 0.006)).toFixed(2);
-      const low = +(Math.min(open, close) - Math.random() * (curPrice * 0.006)).toFixed(2);
-      const volume = Math.floor(15000 + Math.random() * 85000);
-
-      const time = timeframe === "1D" 
-        ? dateObj.toISOString().split("T")[0] 
-        : Math.floor(timeMs / 1000);
-
-      candles.push({ time, open, high, low, close, volume });
-      curPrice = close;
-    }
-    return candles;
-  },
-  async getWebSocketUri() {
-    const url = this.getFunctionUrl();
-    if (!url) return null;
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": this.getAnonKey()
-        },
-        body: JSON.stringify({ action: "get_ws_url" })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.authorizedRedirectUri || json.webSocketUrl) {
-          return json.authorizedRedirectUri || json.webSocketUrl;
-        }
-      }
-    } catch (err) {
-      console.warn("Could not retrieve Upstox WebSocket feed URL from Supabase Edge:", err);
-    }
-    return null;
-  },
-  async fetchLatestPrice(symbol) {
-    const url = this.getFunctionUrl();
-    if (url) {
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": this.getAnonKey()
-          },
-          body: JSON.stringify({ action: "get_latest_price", symbol })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const p = json.price || json.ltp || (json.data && json.data.ltp);
-          if (p && !isNaN(p) && p > 0) {
-            return parseFloat(p);
-          }
-        }
-      } catch (err) {
-        console.debug("fetchLatestPrice Edge error, using fallback reference:", err);
-      }
-    }
-    // Fallback reference price from verified 2026 NSE master data
-    const matched = STOCKS.find(s => s.symbol === symbol);
-    return matched ? matched.price : null;
-  }
+ getFunctionUrl(){return SUPABASE_URL + '/functions/v1/upstox-market-data';}
 };
 
 function updateDataFeedBadge(text) {
@@ -1506,7 +1149,7 @@ const AnalysisEngine = {
         avgLoss = (avgLoss * (period - 1) - diff) / period;
       }
     }
-    if (avgLoss === 0) return 100.0;
+    if (avgLoss === 0) return avgGain === 0 ? 50.0 : 100.0;
     const rs = avgGain / avgLoss;
     return +(100 - (100 / (1 + rs))).toFixed(1);
   },
@@ -1651,15 +1294,16 @@ const AnalysisEngine = {
     if (last.close > last.open && body > (last.high - last.low) * 0.85) {
       return "Bullish Marubozu (पूर्ण बायर्स डोमिनेंस)";
     }
-    return "हायर-हाई और हायर-लो अपट्रेंड सेटअप";
+    return "No supported candle pattern detected";
   }
 };
 
 // -------------------------------------------------------------
 // MAIN STOCK CHART LOADER & AI ANALYSIS RENDERER
 // -------------------------------------------------------------
-async function loadStockChartAndAnalysis(stock) {
-  if (!currentUser || currentUser.status !== "approved") return;
+async function loadStockChartAndAnalysis(stock, snapshot = null) {
+  if (!snapshot) { onMarketSelection(); return; }
+  if (!currentUser || !hasActiveAccess()) return;
 
   if (!lwChart) {
     initLightweightChart();
@@ -1670,7 +1314,25 @@ async function loadStockChartAndAnalysis(stock) {
   document.getElementById("legendInterval").innerText = currentTimeframe;
 
   // Fetch Candles via Upstox / Supabase Service
-  currentCandles = await UpstoxSupabaseService.fetchCandles(stock.symbol, currentTimeframe);
+  const requestedTimeframe = currentTimeframe;
+  const candles = snapshot.candles;
+  applyQuote(stock, snapshot);
+  if (selectedStock?.symbol !== stock.symbol || currentTimeframe !== requestedTimeframe) return;
+  currentCandles = candles;
+  if (!candles.length) {
+    if (candleSeries) candleSeries.setData([]);
+    if (volumeSeries) volumeSeries.setData([]);
+    for (const series of [emaSeries, smaSeries, vwapSeries, bbUpperSeries, bbLowerSeries]) {
+      if (series) series.setData([]);
+    }
+    for (const line of activeSrLines) { if (candleSeries) candleSeries.removePriceLine(line); }
+    activeSrLines = [];
+    document.querySelectorAll('[id^="ind"]').forEach(node => {
+      if (!node.children.length) node.textContent = 'Unavailable';
+    });
+    stopLivePriceStream();
+    return;
+  }
 
   if (!currentCandles || currentCandles.length === 0) return;
 
@@ -1694,6 +1356,11 @@ async function loadStockChartAndAnalysis(stock) {
     })));
   }
 
+  if (currentCandles.length < 50) {
+    document.querySelectorAll('[id^="ind"],[id^="aiBlock"]').forEach(node => { if (!node.children.length) node.textContent = 'At least 50 candles required for analysis'; });
+    if(lwChart)lwChart.timeScale().fitContent();
+    return;
+  }
   // 3. Run Analysis Engine
   const ema20 = AnalysisEngine.calculateEMA(currentCandles, 20);
   const sma50 = AnalysisEngine.calculateSMA(currentCandles, 50);
@@ -1831,113 +1498,21 @@ async function loadStockChartAndAnalysis(stock) {
 }
 
 function renderStructuredAiAnalysis(stock, price, ema, sma, rsi, macd, sr, pattern, atr) {
-  const isTrendBullish = price >= ema && ema >= sma;
-  const trendText = isTrendBullish
-    ? `${stock.symbol} स्पष्ट रूप से 20 EMA (₹${ema.toFixed(0)}) और 50 SMA (₹${sma.toFixed(0)}) के ऊपर बना हुआ है। प्राइस एक्शन लगातार हायर-हाई और हायर-लो फॉर्मेशन प्रदर्शित कर रहा है।`
-    : `${stock.symbol} में मूविंग एवरेजेस (₹${ema.toFixed(0)}) के समीप कंसोलिडेशन दिख रहा है। ट्रेंड में स्थिरता के लिए सपोर्ट लेवल पर क्लोजिंग आवश्यक है।`;
-  document.getElementById("aiBlockTrend").innerText = trendText;
-
-  const momText = `RSI वर्तमान में ${rsi.toFixed(1)} पर है। MACD हिस्टोग्राम (${macd.hist >= 0 ? '+' : ''}${macd.hist}) ${macd.status} दर्शा रहा है, जो बायर्स और सेलर्स के बीच संतुलित गति का तकनीकी प्रमाण है।`;
-  document.getElementById("aiBlockMomentum").innerText = momText;
-
-  document.getElementById("aiBlockLevels").innerHTML = `
-    <b>तात्कालिक सपोर्ट (S1):</b> ₹${sr.s1.toFixed(1)}<br>
-    <b>प्रमुख रेसिस्टेंस (R1):</b> ₹${sr.r1.toFixed(1)}<br>
-    <b>स्विंग दायरा:</b> ₹${sr.lowest.toFixed(0)} - ₹${sr.highest.toFixed(0)}
-  `;
-
-  document.getElementById("aiBlockPattern").innerText = `अंतिम कैंडल्स में "${pattern}" का निर्माण हुआ है। वॉल्यूम एक्टिविटी औसत 20-डे मूविंग वॉल्यूम के अनुरूप है।`;
-
-  const stoploss = (price - (atr * 1.5)).toFixed(1);
-  const target = (price + (atr * 2.5)).toFixed(1);
-  document.getElementById("aiBlockRisk").innerHTML = `
-    <b>तकनीकी इनवैलिडेशन (Stoploss):</b> ₹${stoploss} (यदि दैनिक कैंडल इसके नीचे बंद होती है तो सेटअप अमान्य होगा)<br>
-    <b>संभावित दायरा (Target Band):</b> ₹${target}<br>
-    <b>रिस्क-रिवॉर्ड रेशियो:</b> 1:1.7 (अनुकूल)
-  `;
-
-  document.getElementById("aiBlockSummary").innerText = `
-    चार्ट वर्तमान में तकनीकी नियमों के आधार पर स्पष्ट दिशा दर्शा रहा है। ₹${sr.s1.toFixed(0)} का सपोर्ट ज़ोन सुरक्षित रहने तक संरचना सकारात्मक है। बाज़ार की किसी भी अप्रत्याशित वोलैटिलिटी से सुरक्षा के लिए स्टॉपलॉस अनुशासन अनिवार्य है।
-  `;
+ report('aiBlockTrend', stock.symbol+' · '+currentTimeframe+' candles: close '+money(price)+', EMA20 '+money(ema)+', SMA50 '+money(sma)+'.');
+ report('aiBlockMomentum', 'RSI14: '+rsi.toFixed(1)+'. MACD histogram: '+macd.hist+'.');
+ report('aiBlockLevels', 'Calculated support '+money(sr.s1)+' / resistance '+money(sr.r1)+'.');
+ report('aiBlockPattern', pattern);
+ report('aiBlockRisk', 'ATR14: '+money(atr)+'. Indicator values are derived from the selected candles, not guaranteed future prices.');
+ report('aiBlockSummary', 'Rule-based historical analysis. Quote and candle timestamps may differ; no buy/sell recommendation is generated.');
 }
 
 // -------------------------------------------------------------
 // TIMEFRAME & INDICATOR TOGGLE CONTROLS
 // -------------------------------------------------------------
-function switchChartMode(mode) {
-  currentChartMode = mode;
-  const btnCustom = document.getElementById("btnModeCustom");
-  const btnTvLive = document.getElementById("btnModeTvLive");
-  const lwContainer = document.getElementById("lightweight_chart_container");
-  const tvContainer = document.getElementById("official_tv_container");
-  const tfGroup = document.getElementById("timeframeTabsGroup");
-  const chartLegend = document.getElementById("chartLegend");
-
-  if (btnCustom) btnCustom.classList.toggle("active", mode === "custom");
-  if (btnTvLive) btnTvLive.classList.toggle("active", mode === "tvlive");
-
-  if (mode === "tvlive") {
-    if (lwContainer) lwContainer.classList.add("hidden");
-    if (tvContainer) tvContainer.classList.remove("hidden");
-    if (chartLegend) chartLegend.classList.add("hidden");
-    updateDataFeedBadge("TradingView Official Live WebSocket (100% Broker Match)");
-    renderOfficialTradingViewWidget(selectedStock);
-  } else {
-    if (tvContainer) tvContainer.classList.add("hidden");
-    if (lwContainer) lwContainer.classList.remove("hidden");
-    if (chartLegend) chartLegend.classList.remove("hidden");
-    updateDataFeedBadge("Upstox V3 Market Relay • Supabase Edge Active");
-    if (selectedStock) {
-      loadStockChartAndAnalysis(selectedStock);
-    }
-  }
-}
-
-function renderOfficialTradingViewWidget(stock) {
-  const container = document.getElementById("official_tv_container");
-  if (!container || !stock) return;
-
-  const tvSymbol = stock.tvSymbol || `NSE:${stock.symbol}`;
-  container.innerHTML = `
-    <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
-      <div id="tradingview_widget_embed" style="height: 100%; width: 100%;"></div>
-    </div>
-  `;
-
-  // Dynamically load TradingView official embed script if not loaded
-  const loadWidget = () => {
-    if (typeof TradingView !== "undefined") {
-      new TradingView.widget({
-        autosize: true,
-        symbol: tvSymbol,
-        interval: currentTimeframe === "1m" ? "1" : currentTimeframe === "5m" ? "5" : currentTimeframe === "15m" ? "15" : currentTimeframe === "1h" ? "60" : "D",
-        timezone: "Asia/Kolkata",
-        theme: "dark",
-        style: "1",
-        locale: "in",
-        toolbar_bg: "#0c121e",
-        enable_publishing: false,
-        hide_side_toolbar: false,
-        allow_symbol_change: true,
-        save_image: false,
-        container_id: "tradingview_widget_embed"
-      });
-    }
-  };
-
-  if (typeof TradingView === "undefined") {
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/tv.js";
-    script.async = true;
-    script.onload = loadWidget;
-    document.head.appendChild(script);
-  } else {
-    loadWidget();
-  }
-}
+function switchChartMode() { currentChartMode='custom'; onMarketSelection(); }
 
 function switchTimeframe(tf) {
-  if (!currentUser || currentUser.status !== "approved") return;
+  if (!currentUser || !hasActiveAccess()) return;
   currentTimeframe = tf;
 
   document.querySelectorAll(".timeframe-tabs .tab-btn").forEach(btn => {
@@ -1990,330 +1565,6 @@ function toggleIndicator(ind) {
 // -------------------------------------------------------------
 // REAL-TIME UPSTOX V3 WEBSOCKET & 60FPS LIVE PRICE STREAM
 // -------------------------------------------------------------
-function applyPriceTick(newPrice, tickVolume) {
-  if (!selectedStock || isNaN(newPrice) || newPrice <= 0) return;
-
-  const prevPrice = selectedStock.price;
-  const delta = +(newPrice - prevPrice).toFixed(2);
-
-  // Update selected stock properties
-  selectedStock.price = parseFloat(newPrice.toFixed(2));
-  selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
-  const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
-  selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
-
-  // Update live candlestick in TradingView Lightweight Charts
-  if (currentCandles.length > 0) {
-    const lastCandle = currentCandles[currentCandles.length - 1];
-    lastCandle.close = selectedStock.price;
-    lastCandle.high = Math.max(lastCandle.high, selectedStock.price);
-    lastCandle.low = Math.min(lastCandle.low, selectedStock.price);
-    if (tickVolume && tickVolume > 0) {
-      lastCandle.volume = (lastCandle.volume || 0) + tickVolume;
-    }
-
-    if (candleSeries) {
-      candleSeries.update({
-        time: lastCandle.time,
-        open: lastCandle.open,
-        high: lastCandle.high,
-        low: lastCandle.low,
-        close: lastCandle.close
-      });
-    }
-
-    if (volumeSeries && activeIndicators.volume) {
-      volumeSeries.update({
-        time: lastCandle.time,
-        value: lastCandle.volume,
-        color: lastCandle.close >= lastCandle.open ? "rgba(0, 230, 118, 0.4)" : "rgba(255, 61, 113, 0.4)"
-      });
-    }
-
-    // Update legend
-    const legend = document.getElementById("legendOhlc");
-    if (legend) {
-      legend.innerText = `O: ${lastCandle.open.toFixed(2)}  H: ${lastCandle.high.toFixed(2)}  L: ${lastCandle.low.toFixed(2)}  C: ${lastCandle.close.toFixed(2)}`;
-    }
-  }
-
-  // Update Header UI Elements (selectedStockPrice & animation triggers)
-  const priceElem = document.getElementById("selectedStockPrice");
-  const changeElem = document.getElementById("selectedStockChange");
-  if (priceElem && changeElem) {
-    const isPos = selectedStock.change >= 0;
-    priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-    priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-    // Trigger flash-green or flash-red animation class on selectedStockPrice
-    priceElem.classList.remove("flash-green", "flash-red");
-    void priceElem.offsetWidth; // Force CSS reflow to re-trigger keyframe animation
-    priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
-
-    changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-    changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
-  }
-
-  // Update stock item in shares list
-  const listPriceElem = document.getElementById(`listPrice_${selectedStock.symbol}`);
-  const listChangeElem = document.getElementById(`listChange_${selectedStock.symbol}`);
-  if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-  if (listChangeElem) {
-    const isPos = selectedStock.change >= 0;
-    listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
-    listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-  }
-
-  // Check price threshold alerts
-  checkPriceAlerts(selectedStock.symbol, selectedStock.price, prevPrice);
-}
-
-function startLivePriceStream() {
-  stopLivePriceStream();
-
-  // 1. Attempt Upstox V3 WebSocket connection first
-  connectUpstoxWebSocket();
-
-  // 2. High-Frequency Simulation Fallback / Companion Interval
-  liveDataInterval = setInterval(() => {
-    if (!currentUser || currentUser.status !== "approved") {
-      stopLivePriceStream();
-      return;
-    }
-
-    // If WebSocket is actively open and receiving ticks, fallback interval remains passive
-    if (upstoxWebSocket && upstoxWebSocket.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    if (!selectedStock || currentCandles.length === 0) return;
-
-    // Authentic equity market micro-tick anchored tightly around official benchmark (max 0.08% oscillation)
-    const benchmark = lastValidatedPrice || selectedStock.price;
-    const currentDrift = (selectedStock.price - benchmark) / benchmark;
-    // Mean-reversion bias towards the benchmark so it never drifts from TradingView/Exchange truth
-    const isTickPositive = currentDrift > 0.0005 ? false : (currentDrift < -0.0005 ? true : Math.random() > 0.5);
-    const tickMagnitude = (Math.random() * 0.0006 + 0.0002);
-    const delta = (isTickPositive ? 1 : -1) * (benchmark * tickMagnitude);
-    const nextPrice = Math.max(1, +(selectedStock.price + delta).toFixed(2));
-    const addedVol = Math.floor(Math.random() * 25 + 5);
-
-    const renderStart = performance.now();
-    applyPriceTick(nextPrice, addedVol);
-    const localProcDuration = performance.now() - renderStart;
-
-    updateLatencyDebugUI(null, localProcDuration, Date.now(), nextPrice, "ENGINE");
-  }, 2200);
-
-  // 3. Market Price Reconciliation Loop: Fetches official Upstox REST API price exactly every 5 seconds,
-  // overriding any lagged or drifting WebSocket ticks to keep UI 100% true to the exchange
-  restReconciliationInterval = setInterval(() => {
-    reconcileMarketPrice();
-  }, 5000);
-}
-
-/**
- * Market Price Reconciliation Function
- * Fetches the latest price from Upstox REST API exactly every 5 seconds,
- * ignoring the potentially lagged WebSocket feed, and updates the UI
- * to match the official exchange price perfectly.
- */
-async function reconcileMarketPrice() {
-  if (!currentUser || currentUser.status !== "approved" || !selectedStock) return;
-
-  const targetSymbol = selectedStock.symbol;
-  try {
-    const officialPrice = await UpstoxSupabaseService.fetchLatestPrice(targetSymbol);
-    if (!officialPrice || isNaN(officialPrice) || officialPrice <= 0) return;
-
-    // Verify user hasn't switched to another stock during network latency
-    if (!selectedStock || selectedStock.symbol !== targetSymbol) return;
-
-    lastValidatedPrice = officialPrice;
-    const currentPrice = selectedStock.price;
-    const delta = +(officialPrice - currentPrice).toFixed(2);
-
-    // Update selected stock master price to match official exchange price perfectly
-    selectedStock.price = parseFloat(officialPrice.toFixed(2));
-    if (selectedStock.basePrice) {
-      selectedStock.change = parseFloat((selectedStock.price - selectedStock.basePrice).toFixed(2));
-      selectedStock.changePercent = parseFloat(((selectedStock.change / selectedStock.basePrice) * 100).toFixed(2));
-    } else {
-      selectedStock.change = parseFloat((selectedStock.change + delta).toFixed(2));
-      const baseRef = Math.max(1, selectedStock.price - selectedStock.change);
-      selectedStock.changePercent = parseFloat(((selectedStock.change / baseRef) * 100).toFixed(2));
-    }
-
-    // 1. Update Header UI Elements (Price, Change, and Animation)
-    const priceElem = document.getElementById("selectedStockPrice");
-    const changeElem = document.getElementById("selectedStockChange");
-    if (priceElem && changeElem) {
-      const isPos = selectedStock.change >= 0;
-      priceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-      priceElem.style.color = isPos ? "var(--green)" : "var(--red)";
-
-      if (Math.abs(delta) > 0.05) {
-        priceElem.classList.remove("flash-green", "flash-red");
-        void priceElem.offsetWidth; // Trigger CSS reflow
-        priceElem.classList.add(delta >= 0 ? "flash-green" : "flash-red");
-      }
-
-      changeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-      changeElem.style.color = isPos ? "var(--green)" : "var(--red)";
-    }
-
-    // 2. Update Live Candlestick & Legend in TradingView Lightweight Chart
-    if (currentCandles && currentCandles.length > 0) {
-      const lastCandle = currentCandles[currentCandles.length - 1];
-      lastCandle.close = selectedStock.price;
-      lastCandle.high = Math.max(lastCandle.high, selectedStock.price);
-      lastCandle.low = Math.min(lastCandle.low, selectedStock.price);
-
-      if (candleSeries) {
-        candleSeries.update({
-          time: lastCandle.time,
-          open: lastCandle.open,
-          high: lastCandle.high,
-          low: lastCandle.low,
-          close: lastCandle.close
-        });
-      }
-
-      const legend = document.getElementById("legendOhlc");
-      if (legend) {
-        legend.innerText = `O: ${lastCandle.open.toFixed(2)}  H: ${lastCandle.high.toFixed(2)}  L: ${lastCandle.low.toFixed(2)}  C: ${lastCandle.close.toFixed(2)}`;
-      }
-    }
-
-    // 3. Update Shares List Sidebar Item
-    const listPriceElem = document.getElementById(`listPrice_${targetSymbol}`);
-    const listChangeElem = document.getElementById(`listChange_${targetSymbol}`);
-    if (listPriceElem) listPriceElem.innerText = `₹${selectedStock.price.toFixed(2)}`;
-    if (listChangeElem) {
-      const isPos = selectedStock.change >= 0;
-      listChangeElem.className = `stock-change ${isPos ? 'positive' : 'negative'}`;
-      listChangeElem.innerText = `${isPos ? '+' : ''}${selectedStock.change.toFixed(2)} (${isPos ? '+' : ''}${selectedStock.changePercent}%)`;
-    }
-
-    // 4. Check user-defined price alerts
-    checkPriceAlerts(targetSymbol, selectedStock.price, currentPrice);
-
-    // 5. Update visual sync badge indicator
-    const syncBadge = document.getElementById("reconcileStatusBadge");
-    if (syncBadge) {
-      syncBadge.innerHTML = `<i class="fa-solid fa-check" style="font-size: 9px; color: var(--green);"></i> REST SYNCED ₹${officialPrice.toFixed(2)}`;
-      setTimeout(() => {
-        if (syncBadge) {
-          syncBadge.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin" style="font-size: 9px; animation-duration: 5s;"></i> REST 5s SYNC`;
-        }
-      }, 2000);
-    }
-  } catch (err) {
-    console.debug("Market Price Reconciliation poll omitted:", err);
-  }
-}
-
-function stopLivePriceStream() {
-  if (liveDataInterval) {
-    clearInterval(liveDataInterval);
-    liveDataInterval = null;
-  }
-  if (restReconciliationInterval) {
-    clearInterval(restReconciliationInterval);
-    restReconciliationInterval = null;
-  }
-  if (wsReconnectTimeout) {
-    clearTimeout(wsReconnectTimeout);
-    wsReconnectTimeout = null;
-  }
-  if (upstoxWebSocket) {
-    try {
-      upstoxWebSocket.onclose = null;
-      upstoxWebSocket.onerror = null;
-      upstoxWebSocket.close();
-    } catch (e) {}
-    upstoxWebSocket = null;
-  }
-}
-
-async function connectUpstoxWebSocket() {
-  if (!currentUser || currentUser.status !== "approved") return;
-  const functionUrl = UpstoxSupabaseService.getFunctionUrl();
-  if (!functionUrl) return;
-
-  try {
-    const wsUrl = await UpstoxSupabaseService.getWebSocketUri();
-    if (!wsUrl) return;
-
-    upstoxWebSocket = new WebSocket(wsUrl);
-
-    upstoxWebSocket.onopen = () => {
-      updateDataFeedBadge("Upstox V3 WebSocket • Connected (Live Feed)");
-      subscribeToCurrentStock();
-    };
-
-    upstoxWebSocket.onmessage = async (event) => {
-      try {
-        let payload = event.data;
-        if (payload instanceof Blob) {
-          payload = await payload.text();
-        } else if (payload instanceof ArrayBuffer) {
-          payload = new TextDecoder().decode(payload);
-        }
-
-        let parsed = null;
-        try {
-          parsed = JSON.parse(payload);
-        } catch (e) {
-          // May be protobuf or raw text in pure binary feeds
-        }
-
-        if (parsed) {
-          handleUpstoxWsMessage(parsed);
-        }
-      } catch (err) {
-        console.warn("Upstox WS message handling error:", err);
-      }
-    };
-
-    upstoxWebSocket.onerror = (err) => {
-      console.warn("Upstox WebSocket error, using resilient fallback:", err);
-      updateDataFeedBadge("Upstox V3 Market Relay • Edge Active");
-    };
-
-    upstoxWebSocket.onclose = () => {
-      updateDataFeedBadge("Upstox V3 Market Relay • Edge Active");
-      upstoxWebSocket = null;
-      // Auto reconnect after delay if user remains approved
-      if (currentUser && currentUser.status === "approved") {
-        wsReconnectTimeout = setTimeout(() => {
-          connectUpstoxWebSocket();
-        }, 5000);
-      }
-    };
-  } catch (e) {
-    console.warn("connectUpstoxWebSocket failed:", e);
-  }
-}
-
-function subscribeToCurrentStock() {
-  if (!upstoxWebSocket || upstoxWebSocket.readyState !== WebSocket.OPEN || !selectedStock) return;
-  const instrumentKey = UPSTOX_INSTRUMENT_KEYS[selectedStock.symbol] || `NSE_EQ|${selectedStock.symbol}`;
-  const subMessage = {
-    guid: "market-feed-sub",
-    method: "sub",
-    data: {
-      mode: "full",
-      instrumentKeys: [instrumentKey]
-    }
-  };
-  try {
-    upstoxWebSocket.send(JSON.stringify(subMessage));
-  } catch (err) {
-    console.warn("Could not send subscribe packet to Upstox WS:", err);
-  }
-}
-
 let latencyMetrics = {
   totalTicks: 0,
   lastTickTime: null,
@@ -2347,7 +1598,7 @@ function toggleLatencyDebugPanel() {
 
 function updateLatencyDebugUI(transitMs, localProcMs, tickTimestampMs, ltp, feedType = "WS") {
   const totalMs = (transitMs !== null && !isNaN(transitMs)) ? (transitMs + localProcMs) : localProcMs;
-  
+
   latencyMetrics.totalTicks++;
   latencyMetrics.ticksThisSecond++;
   latencyMetrics.lastTotalLatency = totalMs;
@@ -2527,8 +1778,8 @@ function openSupabaseModal() {
   if (modal) modal.classList.remove("hidden");
   const urlInput = document.getElementById("supabaseFunctionUrl");
   const keyInput = document.getElementById("supabaseAnonKey");
-  if (urlInput) urlInput.value = localStorage.getItem("upstox_supabase_url") || "";
-  if (keyInput) keyInput.value = localStorage.getItem("upstox_supabase_anon") || "";
+  if (urlInput) { urlInput.value = UpstoxSupabaseService.getFunctionUrl(); urlInput.readOnly = true; }
+  if (keyInput) { keyInput.value = SUPABASE_ANON; keyInput.readOnly = true; }
 }
 
 function closeSupabaseModal() {
@@ -2536,20 +1787,7 @@ function closeSupabaseModal() {
   if (modal) modal.classList.add("hidden");
 }
 
-function saveSupabaseSettings() {
-  const urlInput = document.getElementById("supabaseFunctionUrl");
-  const keyInput = document.getElementById("supabaseAnonKey");
-  if (urlInput && urlInput.value.trim()) {
-    localStorage.setItem("upstox_supabase_url", urlInput.value.trim());
-  }
-  if (keyInput && keyInput.value.trim()) {
-    localStorage.setItem("upstox_supabase_anon", keyInput.value.trim());
-  }
-  closeSupabaseModal();
-  if (selectedStock) {
-    loadStockChartAndAnalysis(selectedStock);
-  }
-}
+function saveSupabaseSettings() { closeSupabaseModal(); }
 
 async function testSupabaseConnection() {
   const statusElem = document.getElementById("bridgeStatusText");
@@ -2558,7 +1796,7 @@ async function testSupabaseConnection() {
 
   if (!url) {
     if (statusElem) {
-      statusElem.innerHTML = `<span style="color:var(--amber);">⚠️ कोई URL दर्ज नहीं है। वर्तमान में <b>Upstox V3 Simulated High-Frequency Engine</b> सक्रिय है।</span>`;
+      statusElem.innerHTML = `<span style="color:var(--amber);">Supabase is not configured. Set the project URL and public key in config.js.</span>`;
     }
     return;
   }
@@ -2570,13 +1808,13 @@ async function testSupabaseConnection() {
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON, "Authorization": `Bearer ${await sessionToken()}` },
       body: JSON.stringify({ action: "ping", symbol: "RELIANCE" })
     });
     if (res.ok) {
       const data = await res.json();
       if (statusElem) {
-        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> कनेक्ट सफल!</span> Source: ${data.source || 'Upstox V3 Edge Function'}`;
+        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> कनेक्ट सफल!</span> Source: ${escapeHtml(data.source || 'Upstox V3 Edge Function')} — ${data.configured ? 'Upstox token configured' : 'Upstox token missing'}`;
       }
     } else {
       if (statusElem) {
@@ -2739,10 +1977,10 @@ function playAlertPingSound(freq = 880, duration = 0.22) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
-    
+
     // Smooth dual-tone chime: First tone 880Hz (A5), resolving to 1320Hz (E6)
     const now = ctx.currentTime;
-    
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
@@ -2812,69 +2050,6 @@ function showToast(title, message, type = "cyan", playSound = false) {
   }, 5500);
 }
 
-async function loadAdminUsers() {
-  if (!currentUser || currentUser.role !== "admin") return;
-  const tbody = document.getElementById("userTableBody");
-  if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Loading registered users...</td></tr>`;
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*&order=created_at.desc`, {
-      headers: { "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` }
-    });
-    const users = await res.json();
-    tbody.innerHTML = "";
-
-    users.forEach(u => {
-      const isApproved = u.status === "approved";
-      const isRejected = u.status === "rejected";
-      const isAdmin = u.role === "admin";
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>
-          <div style="font-weight:600;">${u.full_name} ${isAdmin ? '<span style="color:var(--cyan);">(Admin)</span>' : ''}</div>
-          <div style="color:var(--text-muted); font-size:11px;">${u.email}</div>
-        </td>
-        <td>${u.mobile_number}</td>
-        <td>
-          <span class="badge ${u.status}">${u.status}</span>
-        </td>
-        <td>
-          <div class="action-btn-group">
-            ${!isApproved ? `<button class="btn-sm btn-green" onclick="updateUserStatus('${u.id}', 'approved')"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
-            ${!isRejected && !isAdmin ? `<button class="btn-sm btn-red" onclick="updateUserStatus('${u.id}', 'rejected')"><i class="fa-solid fa-xmark"></i> Reject</button>` : ''}
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--red);">Failed to load users: ${err.message}</td></tr>`;
-  }
-}
-
-async function updateUserStatus(userId, status) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
-      method: "PATCH",
-      headers: {
-        "apikey": SUPABASE_ANON,
-        "Authorization": `Bearer ${SUPABASE_ANON}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        status: status,
-        approved_by: currentUser.email,
-        approved_at: new Date().toISOString()
-      })
-    });
-    loadAdminUsers();
-  } catch (e) {
-    alert("Error updating status: " + e.message);
-  }
-}
-
 function destroyActiveChart() {
   if (lwChart) {
     try {
@@ -2888,11 +2063,16 @@ function destroyActiveChart() {
   if (container) container.innerHTML = "";
 }
 
-function logout() {
+async function logout() {
+  if (authClient) await authClient.auth.signOut({ scope: "local" });
   stopLivePriceStream();
   destroyActiveChart();
   localStorage.removeItem("app_user");
   currentUser = null;
+  tradeRows = []; tradeOwner = null;
+  document.getElementById("accessPanel").classList.add("hidden");
+  document.getElementById("tradeTableBody").innerHTML = "";
+  document.getElementById("holdingsBody").innerHTML = "";
   document.getElementById("userHeader").classList.add("hidden");
   showView("auth");
 }

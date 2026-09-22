@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chart Analyzer Pro - AI Stock Screener & Real-Time Charts</title>
+  <title>Chart Analyzer Pro - Stock Screener & Historical Charts</title>
   <meta name="theme-color" content="#0b0f19">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://s3.tradingview.com/tv.js"></script>
+
+  <script src="vendor/lightweight-charts.js"></script>
+
   <style>
     :root {
       --bg: #080c14;
@@ -194,9 +194,9 @@
     }
 
     /* Shares Stock List & Interactive Chart */
-    .dashboard-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    .dashboard-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
     @media (max-width: 850px) {
-      .dashboard-layout { grid-template-columns: 1fr; }
+      .dashboard-layout { grid-template-columns: minmax(0, 1fr); }
     }
 
     /* Dedicated Latency & Tick Debug Panel */
@@ -398,7 +398,7 @@
       border-color: var(--cyan);
     }
 
-    /* Key Indicators & AI Insight */
+    /* Key Indicators & Technical Insight */
     .indicator-pill {
       display: inline-flex;
       align-items: center;
@@ -563,6 +563,17 @@
     }
 
     .hidden { display: none !important; }
+    .journal-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px }
+    .plan-setting { display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 }
+    button:disabled {opacity:0.45;cursor:not-allowed}
+    .dashboard-layout > *, .card { min-width: 0; }
+    #dataFeedBadge { max-width: 230px; overflow-wrap: anywhere; }
+    .timeframe-tabs { flex-wrap: wrap; }
+    @media (max-width: 600px) {
+      .dashboard-layout .card { padding: 12px; }
+      .dashboard-layout .card > div { max-width: 100%; }
+      #selectedStockPrice { font-size: 20px !important; }
+    }
   </style>
 </head>
 <body>
@@ -602,6 +613,7 @@
           <label>ईमेल आईडी (Email ID)</label>
           <input type="email" id="regEmail" class="form-control" placeholder="rahul@example.com" required>
         </div>
+        <div class="form-group"><label for="regPassword">Password</label><input id="regPassword" type="password" class="form-control" minlength="8" autocomplete="new-password" required></div>
         <button type="submit" class="btn" style="width: 100%;"><i class="fa-solid fa-paper-plane"></i> Request Admin Approval</button>
         <div class="switch-link" onclick="toggleAuth(false)">Already registered? Login / Check Status</div>
       </form>
@@ -609,20 +621,15 @@
       <!-- LOGIN FORM -->
       <form id="loginForm" class="hidden" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label>ईमेल या मोबाइल नंबर (Email or Phone)</label>
-          <input type="text" id="loginIdentifier" class="form-control" placeholder="arjunmalviya166@gmail.com" required>
+          <label>Email</label>
+          <input type="email" id="loginIdentifier" class="form-control" placeholder="arjunmalviya166@gmail.com" required>
         </div>
+        <div class="form-group"><label for="loginPassword">Password</label><input id="loginPassword" type="password" class="form-control" minlength="8" autocomplete="current-password" required></div>
         <button type="submit" class="btn" style="width: 100%;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Login / Status Check</button>
         <div class="switch-link" onclick="toggleAuth(true)">New user? Register with Name & Mobile</div>
       </form>
 
-      <!-- Quick Admin Login Link -->
-      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border);">
-        <button class="btn btn-secondary" style="font-size: 12px; width: 100%; padding: 10px;" onclick="adminQuickLogin()">
-          <i class="fa-solid fa-user-shield" style="color:var(--cyan)"></i> Quick Login as Admin (Arjun)
-        </button>
-      </div>
-
+      <p style="margin-top:12px">Prices and charts require an active Upstox connection. No sample prices are shown.</p>
       <div id="authAlert" style="margin-top: 14px; font-size: 13px; font-weight: 600;"></div>
     </div>
 
@@ -640,7 +647,12 @@
     </div>
 
     <!-- MAIN APP DASHBOARD (APPROVED USERS ONLY) -->
-    <div id="appDashboard" class="hidden">
+    <section id="accessPanel" class="card hidden">
+ <h2>Access plans</h2><p id="accessDetails"></p><div id="planChoices" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+ <p id="accessMessage" aria-live="polite"></p><small id="accessEventHistory"></small>
+</section>
+<div id="appDashboard" class="hidden">
+ <section class="card"><strong id="marketState" aria-live="polite">Awaiting broker connection</strong><p>Prices show the last exchange trade time. Market closed / status unavailable: automatic chart updates pause. Manual refresh fetches the last available broker data.</p></section>
       <!-- Admin Rights Panel (Visible only if user role == 'admin') -->
       <div id="adminPanel" class="card hidden" style="border-color: var(--cyan); margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -651,7 +663,7 @@
         </div>
         <p style="margin-top: 6px;">यहाँ सभी यूज़र्स की लिस्ट है। नए यूज़र्स को <b>Approve</b> करके तुरंत Rights दें:</p>
         
-        <div style="overflow-x: auto;">
+<div id="planSettings"></div><p id="adminMessage" aria-live="polite"></p>        <div style="overflow-x: auto;">
           <table class="user-table">
             <thead>
               <tr>
@@ -668,10 +680,30 @@
         </div>
       </div>
 
+<section class="card" id="journalPanel">
+ <h2>My trades & history</h2><p id="journalOwner"></p><p>Record purchases and sales you made with your broker. This form does not place orders.</p>
+ <form id="tradeForm" onsubmit="saveTrade(event)">
+ <input type="hidden" id="tradeId">
+ <div class="journal-grid">
+ <label>Symbol<input id="tradeSymbol" class="form-control" required maxlength="30" placeholder="RELIANCE"></label>
+ <label>Exchange<select id="tradeExchange" class="form-control"><option>NSE</option><option>BSE</option></select></label>
+ <label>Type<select id="tradeSide" class="form-control"><option>BUY</option><option>SELL</option></select></label>
+ <label>Trade date (IST)<input id="tradeDate" type="date" class="form-control" required></label>
+ <label>Quantity<input id="tradeQuantity" type="number" min="0.000001" max="1000000000" step="0.000001" class="form-control" required></label>
+ <label>Price per share (INR)<input id="tradePrice" type="number" min="0.000001" max="1000000000" step="0.000001" class="form-control" required></label>
+ <label>Total charges (INR)<input id="tradeFees" type="number" min="0" max="1000000000" step="0.01" value="0" class="form-control"></label>
+ <label>Notes<input id="tradeNotes" maxlength="2000" class="form-control" placeholder="Broker / reason / reference"></label>
+ </div><button id="tradeSave" type="submit" class="btn"><span id="tradeSaveLabel">Save trade</span></button> <button type="button" class="btn btn-secondary" onclick="cancelTradeEdit()">Clear</button>
+ </form>
+ <p id="journalMessage" aria-live="polite"></p><button class="btn btn-secondary" onclick="ownHistory()">My history / refresh</button> <button class="btn" onclick="exportTrades()">Download Excel (.xlsx)</button>
+ <div style="overflow:auto"><table class="user-table"><thead><tr><th>Date</th><th>Stock</th><th>Type</th><th>Qty</th><th>Price INR</th><th>Fees INR</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="tradeTableBody"></tbody></table></div>
+ <h3 style="margin-top:20px">Position summary</h3><p>Weighted-average cost including buy fees. Incomplete buy history is flagged; this is not a tax report.</p>
+ <div style="overflow:auto"><table class="user-table"><thead><tr><th>Stock</th><th>Net qty</th><th>Avg cost INR</th><th>Realized P&L INR</th><th>Review</th></tr></thead><tbody id="holdingsBody"></tbody></table></div>
+</section>
       <!-- MAIN SHARES AND CHART AREA -->
       <div class="dashboard-layout">
         <!-- DEDICATED WEBSOCKET LATENCY & REAL-TIME TICK DEBUG UI PANEL -->
-        <div class="debug-latency-panel" id="wsLatencyDebugPanel">
+        <div class="debug-latency-panel" id="wsLatencyDebugPanel" style="display:none">
           <div class="debug-latency-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: rgba(0, 229, 255, 0.15); color: var(--cyan); font-size: 11px;">
@@ -770,7 +802,7 @@
         <div class="card" style="padding: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="font-size: 15px; margin-bottom: 0;"><i class="fa-solid fa-list-check"></i> Indian Shares (NSE)</h2>
-            <span class="live-tick-badge"><span class="live-dot"></span>LIVE</span>
+            <span class="live-tick-badge">BROKER DATA</span>
           </div>
           <p style="font-size: 11px; margin-bottom: 10px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
           
@@ -819,11 +851,8 @@
 
             <div style="text-align: right;">
               <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <span id="reconcileStatusBadge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0, 229, 255, 0.12); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.25); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Auto-Reconciled with Upstox REST API Exchange Price every 5s">
-                  <i class="fa-solid fa-arrows-rotate fa-spin" style="font-size: 9px; animation-duration: 5s;"></i> REST 5s SYNC
-                </span>
-                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;"><span class="live-dot"></span>LIVE STREAM</span>
-                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">₹1,243.80</div>
+                <span class="live-tick-badge" style="font-size: 10px; padding: 2px 6px;">EXCHANGE DATA</span>
+                <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">Unavailable</div>
               </div>
               <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+17.40 (+1.42%)</div>
             </div>
@@ -837,9 +866,7 @@
                 <button class="tab-btn active" id="btnModeCustom" onclick="switchChartMode('custom')" style="font-size: 11px; padding: 4px 8px;" title="Custom Analysis Engine with AI Insights">
                   <i class="fa-solid fa-microchip"></i> Engine Chart
                 </button>
-                <button class="tab-btn" id="btnModeTvLive" onclick="switchChartMode('tvlive')" style="font-size: 11px; padding: 4px 8px; border-color: var(--cyan); color: var(--cyan);" title="Official TradingView Live Real-Time Feed (100% Match with Brokers/NSE)">
-                  <i class="fa-solid fa-satellite-dish"></i> Live TV (Official Tick)
-                </button>
+                <button class="tab-btn" onclick="refreshMarket(true)">Refresh broker data</button>
               </div>
 
               <div id="timeframeTabsGroup" style="display: flex; align-items: center; gap: 6px;">
@@ -881,7 +908,7 @@
               <button class="tab-btn" id="btnDrawingToolsToggle" style="border-color: var(--cyan); color: var(--cyan);" onclick="toggleDrawingMode()" title="Toggle Manual Chart Trendline & S/R Drawing Mode">
                 <i class="fa-solid fa-pen-ruler"></i> Drawing Tools
               </button>
-              <button class="tab-btn" id="btnSetAlert" style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Set Real-Time Price Alert for Selected Stock">
+              <button class="tab-btn" id="btnSetAlert" disabled style="border-color: var(--amber); color: var(--amber);" onclick="openSetAlertModal()" title="Alerts unavailable until a real-time data feed is implemented">
                 <i class="fa-solid fa-bell"></i> Set Alert
               </button>
               <button class="tab-btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="openSupabaseModal()" title="Upstox API V3 & Supabase Edge Function Settings">
@@ -908,7 +935,7 @@
             <!-- Upstox / Supabase Status Pill on Chart -->
             <div style="position: absolute; bottom: 10px; left: 14px; z-index: 10; font-size: 10px; color: var(--cyan); background: rgba(12, 18, 30, 0.85); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); display: flex; align-items: center; gap: 5px;">
               <span class="live-dot"></span>
-              <span id="dataFeedBadge">Upstox V3 Market Relay • Supabase Edge Active</span>
+              <span id="dataFeedBadge">Historical data • Connection not verified</span>
             </div>
           </div>
 
@@ -1040,7 +1067,7 @@
         </div>
 
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
-          🔒 <b>100% Secure Architecture:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
+          🔒 <b>Server-side broker credentials:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
         </p>
 
         <div class="form-group" style="margin-bottom: 12px;">
@@ -1127,13 +1154,12 @@
     <div id="toastContainer" class="toast-container"></div>
   </main>
 
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="vendor/exceljs.min.js"></script>
+  <script src="trading-core.js"></script>
   <script src="app.js"></script>
-  <script>
-    if (typeof SUPABASE_URL === 'undefined') {
-      const s = document.createElement('script');
-      s.src = 'public/app.js';
-      document.body.appendChild(s);
-    }
-  </script>
+  <script src="features.js"></script>
+
 </body>
 </html>

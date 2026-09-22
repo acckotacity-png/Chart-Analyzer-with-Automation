@@ -24,13 +24,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Build public assets
+        run: node scripts/build-web.cjs
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: 'public'
 
       - name: Deploy to GitHub Pages
         id: deployment
