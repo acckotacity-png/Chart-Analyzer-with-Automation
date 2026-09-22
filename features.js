@@ -93,7 +93,10 @@ async function refreshMarket(manual=false){
   if(!data.paused){lastSnapshot=data;await loadStockChartAndAnalysis(selectedStock,data);}
   const label=marketLabel(data.paused?{...data,quote:lastSnapshot?.quote}:data);
   report('marketState',label);updateDataFeedBadge(label);
- }catch(e){if(generation===marketGeneration){marketOpen=false;report('marketState','Data unavailable / last values are stale: '+e.message);updateDataFeedBadge('Data unavailable — no simulated prices');}}
+ }catch(e){if(generation===marketGeneration){
+  if(manual){try{const quoteOnly=await fetchMarket({action:'get_quote',symbol,refresh:true});if(generation!==marketGeneration||symbol!==selectedStock.symbol||!hasActiveAccess())return;marketOpen=!!quoteOnly.market?.isOpen;if(quoteOnly.quote)applyQuote(selectedStock,quoteOnly);const label=marketLabel(quoteOnly);report('marketState',label+' · chart candles unavailable: '+e.message);updateDataFeedBadge(label);return;}catch(quoteError){e=quoteError;}}
+  marketOpen=false;report('marketState','Data unavailable / last values are stale: '+e.message);updateDataFeedBadge('Data unavailable — no simulated prices');
+ }}
  finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
 }
 async function refreshLiveQuote(){

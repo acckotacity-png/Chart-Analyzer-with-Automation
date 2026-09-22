@@ -60,7 +60,7 @@ Deno.serve(async(req:Request)=>{
    const cas=m.cas_eligible_status?.status;
    market={...market,status:m.status||'UNKNOWN',isOpen:m.status==='NORMAL_OPEN',statusChangedAt:m.last_updated,auctionStatus:cas||null};
   }catch{market.message='Market status unavailable; automatic updates paused';}
-  if(action==='market_status'||(body.refresh===true&&!market.isOpen))return reply({status:'success',market,paused:true});
+  if(action==='market_status'||(body.refresh===true&&!market.isOpen&&action!=='get_quote'))return reply({status:'success',market,paused:true});
   if(action==='get_quote'){
    const quoteSymbol=typeof body.symbol==='string'?body.symbol.trim().toUpperCase():'';
    if(!/^[A-Z0-9&._-]{1,30}$/.test(quoteSymbol))return reply({message:'Invalid symbol'},400);
