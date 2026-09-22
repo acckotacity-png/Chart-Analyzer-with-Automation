@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en" translate="no" class="notranslate">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="google" content="notranslate">
   <title>Chart Analyzer Pro - Stock Screener & Historical Charts</title>
   <meta name="theme-color" content="#0b0f19">
   <link rel="manifest" href="manifest.json">
@@ -597,20 +598,20 @@
     <div id="authGate" class="card" style="max-width: 440px; margin: 40px auto; text-align: center;">
       <i class="fa-solid fa-shield-halved" style="font-size: 48px; color: var(--cyan); margin-bottom: 16px;"></i>
       <h2 style="justify-content: center;">Access Authorization</h2>
-      <p>सुपाबेस ऑथराइज़ेशन: नया यूजर रिक्वेस्ट भेजेगा और एडमिन राइट्स (Approval) मिलने पर ही शेयर्स व लाइव चार्ट्स का एक्सेस होगा।</p>
+      <p>Create a secure account, then request an access plan. Charts and saved trade history unlock only after administrator approval.</p>
 
       <!-- REGISTRATION FORM -->
       <form id="registerForm" onsubmit="handleRegister(event)">
         <div class="form-group">
-          <label>पूरा नाम (Full Name)</label>
-          <input type="text" id="regName" class="form-control" placeholder="उदा. राहुल शर्मा" required>
+          <label>Full name</label>
+          <input type="text" id="regName" class="form-control" placeholder="Example: Alex Smith" required>
         </div>
         <div class="form-group">
-          <label>मोबाइल नंबर (Mobile Number)</label>
+          <label>Mobile number</label>
           <input type="tel" id="regMobile" class="form-control" placeholder="9876543210" required>
         </div>
         <div class="form-group">
-          <label>ईमेल आईडी (Email ID)</label>
+          <label>Email address</label>
           <input type="email" id="regEmail" class="form-control" placeholder="rahul@example.com" required>
         </div>
         <div class="form-group"><label for="regPassword">Password</label><input id="regPassword" type="password" class="form-control" minlength="8" autocomplete="new-password" required></div>
@@ -636,9 +637,9 @@
     <!-- PENDING APPROVAL NOTICE FOR USERS -->
     <div id="pendingGate" class="card hidden" style="max-width: 520px; margin: 40px auto; text-align: center; border-color: var(--amber);">
       <i class="fa-solid fa-hourglass-half" style="font-size: 48px; color: var(--amber); margin-bottom: 14px;"></i>
-      <h2 style="justify-content: center; color: var(--amber);">Approval Pending / अप्रूवल पेंडिंग</h2>
+      <h2 style="justify-content: center; color: var(--amber);">Access pending</h2>
       <p style="color: var(--text); font-size: 14px;" id="pendingMessage">
-        आपकी रिक्वेस्ट एडमिन के पास सुरक्षित पहुँच चुकी है। जैसे ही एडमिन आपको Rights देंगे, आपका लॉगिन सक्रिय हो जाएगा।
+        Your request is waiting for administrator approval. Your access will activate after an approved plan is granted.
       </p>
       <div style="display:flex; gap: 10px; margin-top: 20px;">
         <button class="btn" style="flex:1;" onclick="checkActiveStatus()"><i class="fa-solid fa-rotate"></i> Check Status Again</button>
@@ -661,7 +662,7 @@
             <i class="fa-solid fa-rotate"></i> Refresh User List
           </button>
         </div>
-        <p style="margin-top: 6px;">यहाँ सभी यूज़र्स की लिस्ट है। नए यूज़र्स को <b>Approve</b> करके तुरंत Rights दें:</p>
+        <p style="margin-top: 6px;">Review users, prices, access requests, and saved trade history here.</p>
         
 <div id="planSettings"></div><p id="adminMessage" aria-live="polite"></p>        <div style="overflow-x: auto;">
           <table class="user-table">
@@ -804,7 +805,7 @@
             <h2 style="font-size: 15px; margin-bottom: 0;"><i class="fa-solid fa-list-check"></i> Indian Shares (NSE)</h2>
             <span class="live-tick-badge">BROKER DATA</span>
           </div>
-          <p style="font-size: 11px; margin-bottom: 10px;">चार्ट और इंडिकेटर्स देखने के लिए किसी भी शेयर पर क्लिक करें:</p>
+          <p style="font-size: 11px; margin-bottom: 10px;">Select a stock to load authenticated broker data and calculated indicators.</p>
           
           <!-- Search input for Indian Shares -->
           <div class="stock-search-wrap">
@@ -988,12 +989,12 @@
             </div>
           </div>
 
-          <!-- Future AI Layer ("Chart क्या बता रहा है?") -->
+          <!-- Technical analysis summary -->
           <div class="ai-analysis-container">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--cyan); font-size: 14px;">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Technical Analysis & Trade Setup Engine (Chart क्या बता रहा है?)</span>
+                <span>Technical analysis summary</span>
               </div>
               <span style="font-size: 11px; background: rgba(255,170,0,0.12); color: var(--amber); border: 1px solid rgba(255,170,0,0.3); padding: 2px 8px; border-radius: 4px; font-weight: 700;">
                 <i class="fa-solid fa-triangle-exclamation"></i> No Guaranteed Returns • Pure Technical Evidence
@@ -1004,50 +1005,50 @@
             <div class="ai-grid">
               <!-- Block 1: Trend -->
               <div class="ai-card">
-                <div class="ai-card-title"><i class="fa-solid fa-arrow-trend-up"></i> 1. Trend Direction (ट्रेंड)</div>
+                <div class="ai-card-title"><i class="fa-solid fa-arrow-trend-up"></i> 1. Trend direction</div>
                 <div class="ai-card-content" id="aiBlockTrend">
-                  स्टॉक 20 EMA और 50 SMA दोनों प्रमुख मूविंग एवरेजेस से ऊपर ट्रेड कर रहा है। कैंडल्स लगातार हायर-हाई और हायर-लो बना रही हैं।
+                  Waiting for validated broker candles.
                 </div>
               </div>
 
               <!-- Block 2: Momentum -->
               <div class="ai-card">
-                <div class="ai-card-title"><i class="fa-solid fa-gauge-high"></i> 2. Momentum & Oscillators (मोमेंटम)</div>
+                <div class="ai-card-title"><i class="fa-solid fa-gauge-high"></i> 2. Momentum and oscillators</div>
                 <div class="ai-card-content" id="aiBlockMomentum">
-                  RSI 62.4 स्वस्थ बुलिश ज़ोन में है (न तो ओवरसोल्ड, न ही ओवरबॉट)। MACD लाइन सिग्नल लाइन के ऊपर सकारात्मक विस्तार दर्शा रही है।
+                  Waiting for validated broker candles.
                 </div>
               </div>
 
               <!-- Block 3: Support & Resistance -->
               <div class="ai-card">
-                <div class="ai-card-title"><i class="fa-solid fa-layer-group"></i> 3. Key Levels (सपोर्ट और रेसिस्टेंस)</div>
+                <div class="ai-card-title"><i class="fa-solid fa-layer-group"></i> 3. Key levels</div>
                 <div class="ai-card-content" id="aiBlockLevels">
-                  <b>तात्कालिक सपोर्ट:</b> ₹1,220 (20 EMA क्लस्टर)<br>
-                  <b>प्रमुख रेसिस्टेंस:</b> ₹1,265 (अंतिम स्विंग हाई)
+                  <b>Support:</b> Awaiting market data<br>
+                  <b>Resistance:</b> Awaiting market data
                 </div>
               </div>
 
               <!-- Block 4: Candlestick & Price Action -->
               <div class="ai-card">
-                <div class="ai-card-title"><i class="fa-solid fa-chart-simple"></i> 4. Price Action Setup (पैटर्न)</div>
+                <div class="ai-card-title"><i class="fa-solid fa-chart-simple"></i> 4. Price action pattern</div>
                 <div class="ai-card-content" id="aiBlockPattern">
-                  कंसोलिडेशन रेंज के ऊपरी छोर पर बुलिश मारूबोज़ू कैंडल का निर्माण हुआ है, जो बायर्स की सक्रियता का संकेत देता है।
+                  Waiting for validated broker candles.
                 </div>
               </div>
 
               <!-- Block 5: Risk & Invalidation -->
               <div class="ai-card">
-                <div class="ai-card-title"><i class="fa-solid fa-shield-virus"></i> 5. Risk Factors & Stoploss (जोखिम)</div>
+                <div class="ai-card-title"><i class="fa-solid fa-shield-virus"></i> 5. Risk factors</div>
                 <div class="ai-card-content" id="aiBlockRisk">
-                  <b>इनवैलिडेशन स्तर:</b> यदि भाव ₹1,215 से नीचे बंद होता है, तो यह बुलिश संरचना अमान्य हो जाएगी। रिस्क-रिवॉर्ड 1:2.4 पर अनुकूल है।
+                  Waiting for validated broker candles. Analysis is informational, not a recommendation.
                 </div>
               </div>
 
-              <!-- Block 6: "Chart क्या बता रहा है?" -->
+              <!-- Analysis summary -->
               <div class="ai-card" style="border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.06);">
-                <div class="ai-card-title" style="color: var(--cyan);"><i class="fa-solid fa-comment-dots"></i> 6. "Chart क्या बता रहा है?" (Summary)</div>
+                <div class="ai-card-title" style="color: var(--cyan);"><i class="fa-solid fa-comment-dots"></i> 6. Summary</div>
                 <div class="ai-card-content" id="aiBlockSummary" style="font-weight: 500;">
-                  चार्ट वर्तमान में बायर्स के नियंत्रण में है। ब्रेकआउट स्तर के पास वॉल्यूम में 1.45x की वृद्धि देखी गई है। ट्रेडर्स को रेजिस्टेंस ज़ोन (₹1,265) के पास सतर्क रहकर ट्रेलिंग स्टॉपलॉस का प्रयोग करना चाहिए।
+                  Waiting for validated broker candles.
                 </div>
               </div>
             </div>
@@ -1067,7 +1068,7 @@
         </div>
 
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
-          🔒 <b>Server-side broker credentials:</b> आपकी Upstox API Key, Secret और Token <b>Supabase Secrets Vault</b> में सुरक्षित रहेंगे। वे कभी भी GitHub या Frontend में एक्सपोज़ नहीं होंगे।
+          <b>Server-side broker credentials:</b> Upstox credentials stay in Supabase secrets and are never exposed in this website or GitHub repository.
         </p>
 
         <div class="form-group" style="margin-bottom: 12px;">
@@ -1082,7 +1083,7 @@
 
         <div style="background: var(--card-elevated); padding: 10px; border-radius: 8px; margin-bottom: 14px; font-size: 11px; border: 1px solid var(--border);">
           <div style="color: var(--cyan); font-weight: 700; margin-bottom: 4px;"><i class="fa-solid fa-circle-info"></i> Development / Live Status</div>
-          <div id="bridgeStatusText" style="color: var(--text);">वर्तमान में <b>Upstox V3 Simulated High-Frequency Engine</b> सक्रिय है, जो वास्तविक भारतीय बाज़ार (NSE) की कैंडल्स और 60fps टिक्स स्ट्रीम कर रहा है।</div>
+          <div id="bridgeStatusText" style="color: var(--text);">Broker connection not verified. The app does not generate simulated prices or ticks.</div>
         </div>
 
         <div style="display: flex; gap: 8px;">

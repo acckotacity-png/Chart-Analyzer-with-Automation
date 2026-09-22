@@ -235,7 +235,7 @@ async function checkActiveStatus() {
     stopLivePriceStream();
     showView("pending");
     document.getElementById("pendingMessage").innerText =
-      `नमस्ते ${currentUser.full_name}, access pending, expired or revoked. Request a plan below; admin approval is required.`;
+      `Hello ${currentUser.full_name}. Access is pending, expired, or revoked. Request a plan below; administrator approval is required.`;
   }
 }
 
@@ -353,15 +353,15 @@ function renderSharesList() {
     container.innerHTML = `
       <div style="text-align: center; padding: 18px 10px; color: var(--text-muted); font-size: 13px;">
         <i class="fa-solid fa-circle-exclamation" style="font-size: 22px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
-        <span>"${escapeHtml(currentStockSearchQuery)}" प्रीसेट लिस्ट में नहीं है</span>
+        <span>"${escapeHtml(currentStockSearchQuery)}" is not in the preset list</span>
       </div>
       ${cleanQ ? `
         <div class="direct-search-banner" onclick="addAndSelectCustomStock('${cleanQ}')">
           <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <i class="fa-solid fa-bolt" style="color:var(--cyan); font-size:14px;"></i>
-            <span style="font-weight:700; color:var(--cyan);">NSE:${cleanQ} का असली चार्ट खोलें</span>
+            <span style="font-weight:700; color:var(--cyan);">Open NSE:${cleanQ} broker chart</span>
           </div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">क्लिक करें - सीधा लाइव मार्केट से लिंक होगा</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Load through the authenticated broker data service</div>
         </div>
       ` : ''}
     `;
@@ -403,7 +403,7 @@ function renderSharesList() {
       banner.innerHTML = `
         <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
           <i class="fa-solid fa-magnifying-glass-chart" style="color:var(--cyan);"></i>
-          <span style="font-weight:700; color:var(--cyan); font-size:12px;">NSE:${cleanQ} का लाइव चार्ट लोड करें</span>
+          <span style="font-weight:700; color:var(--cyan); font-size:12px;">Load NSE:${cleanQ} broker chart</span>
         </div>
       `;
       container.appendChild(banner);
@@ -1274,7 +1274,7 @@ const AnalysisEngine = {
   },
 
   detectPriceActionPatterns(candles) {
-    if (!candles || candles.length < 3) return "सामान्य कंसोलिडेशन";
+    if (!candles || candles.length < 3) return "No supported candle pattern detected";
     const last = candles[candles.length - 1];
     const prev = candles[candles.length - 2];
 
@@ -1283,16 +1283,16 @@ const AnalysisEngine = {
     const lowerWick = Math.min(last.open, last.close) - last.low;
 
     if (body > 0 && lowerWick > body * 2 && upperWick < body * 0.5) {
-      return "Bullish Hammer (मजबूत बाइंग रिजेक्शन)";
+      return "Bullish hammer";
     }
     if (last.close > last.open && prev.close < prev.open && last.close > prev.open && last.open < prev.close) {
-      return "Bullish Engulfing (कैंडल बायर स्ट्रॉन्ग ब्रेकआउट)";
+      return "Bullish engulfing";
     }
     if (body <= (last.high - last.low) * 0.1) {
-      return "Doji (इंडीसिजन / संभावित ट्रेंड रिवर्सल)";
+      return "Doji";
     }
     if (last.close > last.open && body > (last.high - last.low) * 0.85) {
-      return "Bullish Marubozu (पूर्ण बायर्स डोमिनेंस)";
+      return "Bullish marubozu";
     }
     return "No supported candle pattern detected";
   }
@@ -1814,16 +1814,16 @@ async function testSupabaseConnection() {
     if (res.ok) {
       const data = await res.json();
       if (statusElem) {
-        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> कनेक्ट सफल!</span> Source: ${escapeHtml(data.source || 'Upstox V3 Edge Function')} — ${data.configured ? 'Upstox token configured' : 'Upstox token missing'}`;
+        statusElem.innerHTML = `<span style="color:var(--green); font-weight:700;"><i class="fa-solid fa-circle-check"></i> Connection successful</span> Source: ${escapeHtml(data.source || 'Upstox V3 Edge Function')} — ${data.configured ? 'Upstox token configured' : 'Upstox token missing'}`;
       }
     } else {
       if (statusElem) {
-        statusElem.innerHTML = `<span style="color:var(--red);">HTTP Error ${res.status}: कृपया Edge Function URL की जांच करें।</span>`;
+        statusElem.innerHTML = `<span style="color:var(--red);">HTTP Error ${res.status}: Check the Edge Function configuration.</span>`;
       }
     }
   } catch (err) {
     if (statusElem) {
-      statusElem.innerHTML = `<span style="color:var(--red);"><i class="fa-solid fa-circle-xmark"></i> कनेक्शन विफल: ${err.message}</span>`;
+      statusElem.innerHTML = `<span style="color:var(--red);"><i class="fa-solid fa-circle-xmark"></i> Connection failed: ${err.message}</span>`;
     }
   }
 }
@@ -1865,7 +1865,7 @@ function saveStockAlert() {
   const threshold = parseFloat(thresholdInput.value);
 
   if (isNaN(threshold) || threshold <= 0) {
-    showToast("Invalid Price", "कृपया एक वैध मूल्य दर्ज करें।", "red");
+    showToast("Invalid Price", "Enter a valid price.", "red");
     return;
   }
 
@@ -1884,7 +1884,7 @@ function saveStockAlert() {
   renderActiveAlertsList();
   showToast(
     `Alert Set: ${selectedStock.symbol}`,
-    `जब मूल्य ₹${threshold.toFixed(2)} (${condition === 'gte' ? '≥' : '≤'}) पहुंचेगा, तब अलर्ट प्राप्त होगा।`,
+    `An alert will appear when the price reaches ₹${threshold.toFixed(2)} (${condition === 'gte' ? '≥' : '≤'}).`,
     "green"
   );
   closeSetAlertModal();
@@ -1894,7 +1894,7 @@ function removeStockAlert(alertId) {
   priceAlerts = priceAlerts.filter(a => a.id !== alertId);
   localStorage.setItem("stock_price_alerts", JSON.stringify(priceAlerts));
   renderActiveAlertsList();
-  showToast("Alert Removed", "अलर्ट सफलतापूर्वक हटा दिया गया।", "red");
+  showToast("Alert Removed", "Alert removed.", "red");
 }
 
 function renderActiveAlertsList() {
@@ -1903,7 +1903,7 @@ function renderActiveAlertsList() {
 
   const currentStockAlerts = priceAlerts.filter(a => a.symbol === selectedStock.symbol);
   if (currentStockAlerts.length === 0) {
-    listContainer.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); padding: 4px 0;">इस स्टॉक के लिए कोई सक्रिय अलर्ट नहीं है।</div>`;
+    listContainer.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); padding: 4px 0;">No active alerts for this stock.</div>`;
     return;
   }
 
@@ -1957,7 +1957,7 @@ function checkPriceAlerts(symbol, currentPrice, prevPrice) {
       const colorType = isAbove ? "green" : "red";
       showToast(
         `🚨 Price Alert: ${a.symbol}`,
-        `वर्तमान मूल्य ₹${currentPrice.toFixed(2)} लक्ष्य ₹${a.threshold.toFixed(2)} के पार (${isAbove ? '≥' : '≤'}) पहुंच चुका है!`,
+        `Current price ₹${currentPrice.toFixed(2)} crossed target ₹${a.threshold.toFixed(2)} (${isAbove ? '≥' : '≤'})!`,
         colorType,
         true
       );
