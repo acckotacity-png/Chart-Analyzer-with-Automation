@@ -85,7 +85,9 @@ Deno.serve(async(req:Request)=>{
   const merged=new Map(candles.map(c=>[c.time,c]));for(const c of today)merged.set(c.time,c);
   candles=[...merged.values()].sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0).slice(-500);
   if(!candles.length)throw new Error('No market candles available');
-  const q:any=Object.values(quotes).find((q:any)=>q.instrument_token===instrument.instrument_key);
+  const quoteRows=Object.values(quotes||{}) as any[];
+  // Upstox keys quote objects by display symbol (for example NSE_EQ:TCS), while the request uses an ISIN instrument key. A single-instrument request has one safe quote row.
+  const q:any=quoteRows.find((row:any)=>row.instrument_token===instrument.instrument_key||row.instrument_key===instrument.instrument_key)||quoteRows[0];
   const price=Number(q?.last_price);const ltt=Number(q?.last_trade_time);const change=Number(q?.net_change);
   if(!q || !Number.isFinite(price)||price<=0||!Number.isFinite(ltt)||ltt<=0)throw new Error('Quote or exchange timestamp unavailable');
   return reply({status:'success',source:'upstox',symbol,instrumentKey:instrument.instrument_key,timeframe,market,candles,

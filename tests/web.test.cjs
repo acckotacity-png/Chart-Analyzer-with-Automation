@@ -9,7 +9,7 @@ function edge(options={}){
  if(url.includes('/market/status/'))return options.statusError?json({},503):json({status:'success',data:{status:options.market||'NORMAL_OPEN'}});
  if(url.includes('NSE.json.gz'))return json([{segment:'NSE_EQ',instrument_type:'EQ',trading_symbol:'TCS',instrument_key:'NSE_EQ|test'}]);
  if(options.upstreamError)return json({},401);
- if(url.includes('/market-quote/quotes'))return json({status:'success',data:{'NSE_EQ:TCS':{instrument_token:'NSE_EQ|test',last_price:102,last_trade_time:String(Date.now()),net_change:2}}});
+ if(url.includes('/market-quote/quotes'))return json({status:'success',data:{'NSE_EQ:TCS':{last_price:102,last_trade_time:String(Date.now()),net_change:2}}});
  if(url.includes('/intraday/'))return json({status:'success',data:{candles:[['2026-09-21T09:20:00+05:30',101,103,100,102,200],['2026-09-21T09:15:00+05:30',100,102,99,101,100]]}});
  return json({status:'success',data:{candles:[['2026-09-18T09:15:00+05:30',99,101,98,100,300]]}});
  };
