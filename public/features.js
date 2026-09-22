@@ -81,7 +81,7 @@ async function fetchMarket(body){
  const res=await fetch(SUPABASE_URL+'/functions/v1/upstox-market-data',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_ANON,Authorization:'Bearer '+await sessionToken()},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});
  const data=await res.json();if(!res.ok){if(res.status===401||res.status===403){stopLivePriceStream();checkActiveStatus();}throw new Error(data.message||'Market data unavailable');}return data;
 }
-function marketLabel(data){const m=data.market;const q=data.quote;return (m.isOpen?'Market open · broker refresh every 15 seconds':'Market '+m.status+' · automatic chart updates paused')+(q?' | Last trade: '+new Date(q.lastTradeAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})+' IST':'');}
+function marketLabel(data){const m=data.market;const q=data.quote;return (m.isOpen?'Market open · live broker quote every second':'Market '+m.status+' · automatic chart updates paused')+(q?' | Last trade: '+new Date(q.lastTradeAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})+' IST':'');}
 async function refreshMarket(manual=false){
  if(!hasActiveAccess()||marketBusy)return;
  marketBusy=true;const generation=marketGeneration;const symbol=selectedStock.symbol;const timeframe=currentTimeframe;
@@ -94,7 +94,19 @@ async function refreshMarket(manual=false){
   const label=marketLabel(data.paused?{...data,quote:lastSnapshot?.quote}:data);
   report('marketState',label);updateDataFeedBadge(label);
  }catch(e){if(generation===marketGeneration){marketOpen=false;report('marketState','Data unavailable / last values are stale: '+e.message);updateDataFeedBadge('Data unavailable — no simulated prices');}}
- finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>refreshMarket(false),marketOpen?15000:60000);}}
+ finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
+}
+async function refreshLiveQuote(){
+ if(!hasActiveAccess()||marketBusy)return;
+ marketBusy=true;const generation=marketGeneration;const symbol=selectedStock.symbol;
+ try{
+  const data=await fetchMarket({action:'get_quote',symbol,refresh:true});
+  if(generation!==marketGeneration||symbol!==selectedStock.symbol||!hasActiveAccess())return;
+  marketOpen=!!data.market?.isOpen;
+  if(!data.paused&&data.quote)applyQuote(selectedStock,data);
+  const label=marketLabel(data.paused?{...data,quote:lastSnapshot?.quote}:data);report('marketState',label);updateDataFeedBadge(label);
+ }catch(e){if(generation===marketGeneration){marketOpen=false;report('marketState','Live quote unavailable: '+e.message);updateDataFeedBadge('Live quote unavailable — no simulated prices');}}
+ finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
 }
 function startLivePriceStream(){stopLivePriceStream();refreshMarket(true);}
 function stopLivePriceStream(){marketGeneration++;clearTimeout(marketTimer);marketTimer=null;marketOpen=false;}

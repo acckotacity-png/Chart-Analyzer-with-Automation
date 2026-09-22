@@ -45,7 +45,7 @@ Deno.serve(async(req:Request)=>{
   let body;try{body=await req.json();}catch{return reply({message:'Invalid JSON'},400);}
   if(!body||typeof body!=='object'||Array.isArray(body))return reply({message:'Invalid request'},400);
   const action=body.action||'get_snapshot';
-  if(!['ping','get_snapshot','get_candles','market_status'].includes(action))return reply({message:'Unsupported action'},400);
+  if(!['ping','get_snapshot','get_candles','get_quote','market_status'].includes(action))return reply({message:'Unsupported action'},400);
   const token=Deno.env.get('UPSTOX_ACCESS_TOKEN');
   if(action==='ping')return reply({status:'success',source:'upstox',configured:!!token});
   if(!token)return reply({message:'Admin must configure UPSTOX_ACCESS_TOKEN in Supabase secrets'},503);
@@ -61,6 +61,17 @@ Deno.serve(async(req:Request)=>{
    market={...market,status:m.status||'UNKNOWN',isOpen:m.status==='NORMAL_OPEN' && (!cas||cas==='NORMAL_OPEN'),statusChangedAt:m.last_updated,auctionStatus:cas||null};
   }catch{market.message='Market status unavailable; automatic updates paused';}
   if(action==='market_status'||(body.refresh===true&&!market.isOpen))return reply({status:'success',market,paused:true});
+  if(action==='get_quote'){
+   const quoteSymbol=typeof body.symbol==='string'?body.symbol.trim().toUpperCase():'';
+   if(!/^[A-Z0-9&._-]{1,30}$/.test(quoteSymbol))return reply({message:'Invalid symbol'},400);
+   const quoteInstrument=await resolveInstrument(quoteSymbol);const quoteKey=encodeURIComponent(quoteInstrument.instrument_key);
+   const quoteData=await broker('/v3/market-quote/quotes?instrument_key='+quoteKey);
+   const quoteRows=Object.values(quoteData||{}) as any[];
+   const quote:any=quoteRows.find((row:any)=>row.instrument_token===quoteInstrument.instrument_key||row.instrument_key===quoteInstrument.instrument_key)||quoteRows[0];
+   const price=Number(quote?.last_price);const ltt=Number(quote?.last_trade_time);const change=Number(quote?.net_change);
+   if(!quote||!Number.isFinite(price)||price<=0||!Number.isFinite(ltt)||ltt<=0)throw new Error('Quote or exchange timestamp unavailable');
+   return reply({status:'success',source:'upstox',symbol:quoteSymbol,instrumentKey:quoteInstrument.instrument_key,market,quote:{price,change:Number.isFinite(change)?change:null,previousClose:Number.isFinite(change)?price-change:null,lastTradeAt:new Date(ltt).toISOString(),fetchedAt:new Date().toISOString()},intervalSeconds:1});
+  }
   const symbol=typeof body.symbol==='string'?body.symbol.trim().toUpperCase():'';
   if(!/^[A-Z0-9&._-]{1,30}$/.test(symbol))return reply({message:'Invalid symbol'},400);
   const frames:Record<string,[string,number,number]>={'1m':['minutes',1,28],'5m':['minutes',5,28],'15m':['minutes',15,28],'1h':['hours',1,90],'1D':['days',1,180]};
