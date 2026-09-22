@@ -51,8 +51,9 @@ Deno.serve(async(req:Request)=>{
   if(!token)return reply({message:'Admin must configure UPSTOX_ACCESS_TOKEN in Supabase secrets'},503);
   async function broker(path:string){
    const res=await fetch('https://api.upstox.com'+path,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(15000)});
-   if(!res.ok)throw new Error('Broker request failed ('+res.status+'); check Upstox token and data entitlement');
-   const data=await res.json();if(data.status!=='success')throw new Error('Broker returned unsuccessful data');return data.data;
+   const raw=await res.text();let data:any;try{data=JSON.parse(raw);}catch{data=null;}
+   if(!res.ok){const issue=data?.errors?.[0]||data?.error||data?.data||{};const code=typeof issue?.errorCode==='string'?issue.errorCode:(typeof data?.errorCode==='string'?data.errorCode:'');const message=typeof issue?.message==='string'?issue.message:(typeof data?.message==='string'?data.message:'');throw new Error('Broker request failed ('+res.status+')'+(code?' '+code:'')+(message?': '+message:'; check token or market-data entitlement'));}
+   if(data?.status!=='success')throw new Error('Broker returned unsuccessful data');return data.data;
   }
   let market:any={status:'UNKNOWN',isOpen:false,checkedAt:new Date().toISOString()};
   try{
