@@ -24,7 +24,15 @@ async function requestPlan(code){try{await rpc('request_access',{p_plan:code});r
 function renderPlanSettings(){
  el('planSettings').innerHTML='<h3>Plan prices (INR)</h3><p>Trial: ₹0 / 7 days from admin approval. Paid access starts on approval; renewals extend remaining paid access. Record payment externally before activation.</p>'+accessPlans.filter(p=>p.code!=='trial_7').map(p=>'<div class="plan-setting"><label>'+safe(p.name)+' <input class="form-control" id="price_'+p.code+'" type="number" min="0" step="0.01" value="'+(p.price_inr??'')+'" placeholder="Set price"></label><label><input type="checkbox" id="enabled_'+p.code+'" '+(p.enabled?'checked':'')+'> Enabled</label><button class="btn btn-secondary" onclick="savePlan(&quot;'+p.code+'&quot;)">Save price</button></div>').join('');
 }
-async function savePlan(code){try{const raw=el('price_'+code).value;if(raw==='')throw new Error('Enter a price first');await rpc('admin_set_plan',{p_code:code,p_price:Number(raw),p_enabled:el('enabled_'+code).checked});report('adminMessage','Plan saved. Previous payment records keep their original price.');await loadAccessPanel();}catch(e){report('adminMessage',e.message);}}
+async function savePlan(code){try{const raw=el('price_'+code).value;if(raw==='')throw new Error('Enter a price first');await rpc('admin_set_plan',{p_code:code,p_price:Number(raw),p_enabled:el('enabled_'+code).checked});report('planMessage','Plan saved. Previous payment records keep their original price.');await loadAccessPanel();}catch(e){report('planMessage',e.message);}}
+function openAdminSection(section){
+ if(currentUser?.role!=='admin')return;
+ const rights=el('adminRightsPanel'),prices=el('adminPricesPanel');
+ rights.classList.toggle('hidden',section!=='rights');prices.classList.toggle('hidden',section!=='prices');
+ if(section==='rights')loadAdminUsers();else renderPlanSettings();
+ (section==='rights'?rights:prices).scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeAdminSections(){el('adminRightsPanel')?.classList.add('hidden');el('adminPricesPanel')?.classList.add('hidden');}
 async function loadAdminUsers(){
  if(currentUser?.role!=='admin')return;
  try{

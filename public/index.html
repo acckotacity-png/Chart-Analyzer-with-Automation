@@ -566,6 +566,7 @@
     .hidden { display: none !important; }
     .journal-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px }
     .plan-setting { display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 }
+    .admin-launcher { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
     button:disabled {opacity:0.45;cursor:not-allowed}
     .dashboard-layout > *, .card { min-width: 0; }
     #dataFeedBadge { max-width: 230px; overflow-wrap: anywhere; }
@@ -674,35 +675,25 @@
  <h2>Access plans</h2><p id="accessDetails"></p><div id="planChoices" style="display:flex;gap:8px;flex-wrap:wrap"></div>
  <p id="accessMessage" aria-live="polite"></p><small id="accessEventHistory"></small>
 </section>
+    <section id="adminControlBar" class="card hidden" style="border-color:var(--cyan); margin-bottom:16px;">
+      <h2><i class="fa-solid fa-crown"></i> Administration</h2>
+      <p>Open user access or plan pricing only when you need to manage them. Your market dashboard stays uncluttered.</p>
+      <div class="admin-launcher">
+        <button class="btn" onclick="openAdminSection('rights')"><i class="fa-solid fa-user-shield"></i> User rights & access</button>
+        <button class="btn btn-secondary" onclick="openAdminSection('prices')"><i class="fa-solid fa-indian-rupee-sign"></i> Plan prices</button>
+      </div>
+    </section>
+    <section id="adminRightsPanel" class="card hidden" style="border-color:var(--cyan); margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-user-shield"></i> User rights & access</h2><div><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="loadAdminUsers()"><i class="fa-solid fa-rotate"></i> Refresh</button> <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="closeAdminSections()">Back to dashboard</button></div></div>
+      <p>Approve trials and paid plans, extend access, revoke access, and review saved trades.</p><p id="adminMessage" aria-live="polite"></p>
+      <div style="overflow-x:auto;"><table class="user-table"><thead><tr><th>User details</th><th>Mobile</th><th>Status</th><th>Action</th></tr></thead><tbody id="userTableBody"></tbody></table></div>
+    </section>
+    <section id="adminPricesPanel" class="card hidden" style="border-color:var(--cyan); margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-indian-rupee-sign"></i> Plan prices</h2><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="closeAdminSections()">Back to dashboard</button></div>
+      <div id="planSettings"></div><p id="planMessage" aria-live="polite"></p>
+    </section>
 <div id="appDashboard" class="hidden">
  <section class="card"><strong id="marketState" aria-live="polite">Awaiting broker connection</strong><p>Prices show the last exchange trade time. Market closed / status unavailable: automatic chart updates pause. Manual refresh fetches the last available broker data.</p></section>
-      <!-- Admin Rights Panel (Visible only if user role == 'admin') -->
-      <div id="adminPanel" class="card hidden" style="border-color: var(--cyan); margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <h2><i class="fa-solid fa-crown"></i> Admin Rights & User Approval Portal</h2>
-          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadAdminUsers()">
-            <i class="fa-solid fa-rotate"></i> Refresh User List
-          </button>
-        </div>
-        <p style="margin-top: 6px;">Review users, prices, access requests, and saved trade history here.</p>
-        
-<div id="planSettings"></div><p id="adminMessage" aria-live="polite"></p>        <div style="overflow-x: auto;">
-          <table class="user-table">
-            <thead>
-              <tr>
-                <th>User Details</th>
-                <th>Mobile</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="userTableBody">
-              <!-- Dynamically populated from Supabase -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
 <section class="card" id="journalPanel">
  <h2>My trades & history</h2><p id="journalOwner"></p><p>Record purchases and sales you made with your broker. This form does not place orders.</p>
  <form id="tradeForm" onsubmit="saveTrade(event)">

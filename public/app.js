@@ -278,10 +278,12 @@ async function checkActiveStatus() {
     cancelTradeEdit();
     loadTradeHistory();
     if (currentUser.role === "admin") {
-      document.getElementById("adminPanel").classList.remove("hidden");
+      document.getElementById("adminControlBar").classList.remove("hidden");
+      closeAdminSections();
       loadAdminUsers();
     } else {
-      document.getElementById("adminPanel").classList.add("hidden");
+      document.getElementById("adminControlBar").classList.add("hidden");
+      closeAdminSections();
     }
 
     // Defer chart canvas initialization until after the dashboard view is fully displayed and measured
@@ -2128,6 +2130,8 @@ async function logout() {
   currentUser = null;
   tradeRows = []; tradeOwner = null;
   document.getElementById("accessPanel").classList.add("hidden");
+  document.getElementById("adminControlBar").classList.add("hidden");
+  closeAdminSections();
   document.getElementById("tradeTableBody").innerHTML = "";
   document.getElementById("holdingsBody").innerHTML = "";
   document.getElementById("userHeader").classList.add("hidden");
