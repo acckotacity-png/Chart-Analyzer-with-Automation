@@ -627,7 +627,29 @@
         </div>
         <div class="form-group"><label for="loginPassword">Password</label><input id="loginPassword" type="password" class="form-control" minlength="8" autocomplete="current-password" required></div>
         <button type="submit" class="btn" style="width: 100%;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Login / Status Check</button>
+        <div class="switch-link" onclick="showForgotPassword()">Forgot password?</div>
         <div class="switch-link" onclick="toggleAuth(true)">New user? Register with Name & Mobile</div>
+      </form>
+      <form id="forgotPasswordForm" class="hidden" onsubmit="handleForgotPassword(event)">
+        <div class="form-group">
+          <label for="resetEmail">Registered email</label>
+          <input type="email" id="resetEmail" class="form-control" autocomplete="email" required>
+        </div>
+        <button type="submit" class="btn" style="width:100%;"><i class="fa-solid fa-envelope"></i> Send password reset link</button>
+        <div class="switch-link" onclick="toggleAuth(false)">Back to login</div>
+      </form>
+
+      <form id="passwordRecoveryForm" class="hidden" onsubmit="handlePasswordRecovery(event)">
+        <p>Create a new password for your account.</p>
+        <div class="form-group">
+          <label for="recoveryPassword">New password</label>
+          <input type="password" id="recoveryPassword" class="form-control" minlength="8" autocomplete="new-password" required>
+        </div>
+        <div class="form-group">
+          <label for="recoveryPasswordConfirm">Confirm new password</label>
+          <input type="password" id="recoveryPasswordConfirm" class="form-control" minlength="8" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn" style="width:100%;"><i class="fa-solid fa-key"></i> Save new password</button>
       </form>
 
       <p style="margin-top:12px">Prices and charts require an active Upstox connection. No sample prices are shown.</p>

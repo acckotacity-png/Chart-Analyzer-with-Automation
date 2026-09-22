@@ -20,7 +20,7 @@ The web app now requires Supabase Auth email/password accounts and app_users.id 
 
 - For a NEW, empty project, apply supabase/migrations/202609210001_user_access.sql before registering users. It creates profiles, pending approval defaults, and row-level policies.
 - For an EXISTING project with no Auth accounts, the migration preserves the old app_users table in the non-public app_private schema, revokes browser access to it, and creates the protected table. Users must register and verify new password accounts; old approval is not automatically trusted. The migration refuses conversion if Auth users already exist. The inspected project has 2 legacy profiles and 0 Auth accounts. The migration was approved and applied to qhqbporwncgccpcgrurl. Both legacy profiles are preserved privately; no Auth accounts have been registered yet.
-- Enable Email authentication. Configure Auth Site URL and redirect URLs for the actual deployed website. Users confirm their email, then sign in with their password.
+- Enable Email authentication. Configure Auth Site URL and redirect URLs for the actual deployed website. Add the deployed GitHub Pages URL to both settings so email confirmation and the Forgot password recovery link return to the app. Users confirm their email, then sign in with their password.
 - Register the intended administrator normally. From the trusted SQL editor, promote that VERIFIED Auth UUID:
 
 ```sql

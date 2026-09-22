@@ -135,6 +135,11 @@ let currentChartMode = "custom";
 
 // Initialize on load (handle both interactive/complete and DOMContentLoaded)
 function initApp() {
+  if (authClient?.auth?.onAuthStateChange) {
+    authClient.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") showPasswordRecovery();
+    });
+  }
   checkActiveStatus();
 }
 
@@ -144,10 +149,62 @@ if (document.readyState === "loading") {
   initApp();
 }
 
+function setAuthForm(activeFormId, message = "") {
+  ["registerForm", "loginForm", "forgotPasswordForm", "passwordRecoveryForm"].forEach(id => {
+    const form = document.getElementById(id);
+    if (form) form.classList.toggle("hidden", id !== activeFormId);
+  });
+  const alertBox = document.getElementById("authAlert");
+  if (alertBox) alertBox.textContent = message;
+}
+
 function toggleAuth(showRegister) {
-  document.getElementById("registerForm").classList.toggle("hidden", !showRegister);
-  document.getElementById("loginForm").classList.toggle("hidden", showRegister);
-  document.getElementById("authAlert").innerText = "";
+  setAuthForm(showRegister ? "registerForm" : "loginForm");
+}
+
+function showForgotPassword() {
+  const loginEmail = document.getElementById("loginIdentifier")?.value.trim();
+  setAuthForm("forgotPasswordForm");
+  if (loginEmail) document.getElementById("resetEmail").value = loginEmail;
+}
+
+function showPasswordRecovery() {
+  setAuthForm("passwordRecoveryForm", "Set a new password to finish account recovery.");
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  const box = document.getElementById("authAlert");
+  try {
+    if (!authClient) throw new Error("Supabase is not configured.");
+    const email = document.getElementById("resetEmail").value.trim().toLowerCase();
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await authClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    box.textContent = "If this email is registered, a password-reset link has been sent. Check your inbox and spam folder.";
+  } catch (error) {
+    box.textContent = error.message;
+  }
+}
+
+async function handlePasswordRecovery(e) {
+  e.preventDefault();
+  const box = document.getElementById("authAlert");
+  try {
+    if (!authClient) throw new Error("Supabase is not configured.");
+    const password = document.getElementById("recoveryPassword").value;
+    const confirmPassword = document.getElementById("recoveryPasswordConfirm").value;
+    if (password.length < 8) throw new Error("Use at least 8 characters.");
+    if (password !== confirmPassword) throw new Error("Passwords do not match.");
+    const { error } = await authClient.auth.updateUser({ password });
+    if (error) throw error;
+    document.getElementById("recoveryPassword").value = "";
+    document.getElementById("recoveryPasswordConfirm").value = "";
+    await authClient.auth.signOut({ scope: "local" });
+    setAuthForm("loginForm", "Password updated. Sign in with your new password.");
+  } catch (error) {
+    box.textContent = error.message;
+  }
 }
 
 async function handleRegister(e) {
