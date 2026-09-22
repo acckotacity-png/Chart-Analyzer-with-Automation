@@ -13,9 +13,11 @@
 /captures
 .externalNativeBuild
 .cxx
+.build-outputs/
 local.properties
 .env
 debug.keystore
+debug.keystore.base64
 
 .env.*
 !.env.example
