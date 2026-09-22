@@ -58,7 +58,7 @@ Deno.serve(async(req:Request)=>{
   try{
    const m=await broker('/v2/market/status/NSE');
    const cas=m.cas_eligible_status?.status;
-   market={...market,status:m.status||'UNKNOWN',isOpen:m.status==='NORMAL_OPEN' && (!cas||cas==='NORMAL_OPEN'),statusChangedAt:m.last_updated,auctionStatus:cas||null};
+   market={...market,status:m.status||'UNKNOWN',isOpen:m.status==='NORMAL_OPEN',statusChangedAt:m.last_updated,auctionStatus:cas||null};
   }catch{market.message='Market status unavailable; automatic updates paused';}
   if(action==='market_status'||(body.refresh===true&&!market.isOpen))return reply({status:'success',market,paused:true});
   if(action==='get_quote'){

@@ -6,7 +6,7 @@ function edge(options={}){
  const calls=[];const fetch=async(url,init)=>{calls.push(url);
  if(url.endsWith('/auth/v1/user'))return json({id:'test'});
  if(url.endsWith('/rpc/has_active_access'))return json(options.access!==false);
- if(url.includes('/market/status/'))return options.statusError?json({},503):json({status:'success',data:{status:options.market||'NORMAL_OPEN'}});
+ if(url.includes('/market/status/'))return options.statusError?json({},503):json({status:'success',data:{status:options.market||'NORMAL_OPEN',cas_eligible_status:options.cas?{status:options.cas}:undefined}});
  if(url.includes('NSE.json.gz'))return json([{segment:'NSE_EQ',instrument_type:'EQ',trading_symbol:'TCS',instrument_key:'NSE_EQ|test'}]);
  if(options.upstreamError)return json({},401);
  if(url.includes('/market-quote/quotes'))return json({status:'success',data:{'NSE_EQ:TCS':{last_price:102,last_trade_time:String(Date.now()),net_change:2}}});
@@ -22,6 +22,7 @@ test('anonymous requests never reach broker',async()=>{const e=edge();assert.equ
 test('expired or revoked plan is blocked server-side',async()=>{const e=edge({access:false});assert.equal((await e.handler(request())).status,403);assert.equal(e.calls.length,2);});
 test('missing token gives error, not fabricated prices',async()=>{const e=edge({token:false});const r=await e.handler(request({symbol:'TCS'}));assert.equal(r.status,503);assert.equal((await r.json()).candles,undefined);});
 test('market closed: background refresh never requests quotes or candles',async()=>{const e=edge({market:'NORMAL_CLOSE'});const data=await(await e.handler(request({symbol:'TCS',refresh:true}))).json();assert.equal(data.paused,true);assert.equal(data.market.isOpen,false);assert.equal(e.calls.length,3);});
+test('open NSE market stays live when the separate closing-auction status is closed',async()=>{const e=edge({cas:'CTS_CLOSE'});const data=await(await e.handler(request({action:'get_quote',symbol:'TCS',refresh:true}))).json();assert.equal(data.market.isOpen,true);assert.equal(data.paused,undefined);assert.equal(data.quote.price,102);});
 test('unknown market status freezes background updates',async()=>{const e=edge({statusError:true});const data=await(await e.handler(request({symbol:'TCS',refresh:true}))).json();assert.equal(data.market.status,'UNKNOWN');assert.equal(data.paused,true);});
 test('weekend/holiday manual view returns real last-price snapshot',async()=>{const e=edge({market:'NORMAL_CLOSE'});const data=await(await e.handler(request({symbol:'TCS',timeframe:'5m'}))).json();assert.equal(data.quote.price,102);assert.equal(data.market.isOpen,false);assert.equal(data.candles.length,3);assert.ok(data.candles[0].time<data.candles[2].time);});
 test('open-market quote refresh returns only an authenticated current broker quote',async()=>{const e=edge();const data=await(await e.handler(request({action:'get_quote',symbol:'TCS',refresh:true}))).json();assert.equal(data.intervalSeconds,1);assert.equal(data.quote.price,102);assert.equal(data.candles,undefined);assert.ok(e.calls.some(x=>x.includes('/v3/market-quote/quotes')));});
