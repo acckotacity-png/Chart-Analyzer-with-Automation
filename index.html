@@ -49,6 +49,8 @@
     .workspace-nav .btn { padding:4px 9px; font-size:11px; }
     .workspace-active { background:var(--cyan)!important; color:#000!important; border-color:var(--cyan)!important; }
     #appDashboard.history-mode > :not(#journalPanel) { display:none!important; }
+    @keyframes quoteFlash { 0% { transform:scale(1); text-shadow:none; } 35% { transform:scale(1.08); text-shadow:0 0 16px rgba(0,230,118,.95); } 100% { transform:scale(1); text-shadow:none; } }
+    #selectedStockPrice.quote-tick { animation:quoteFlash .45s ease-out; }
     .badge {
       font-size: 10px;
       font-weight: 800;
@@ -873,6 +875,7 @@
                 <div id="selectedStockPrice" style="font-size: 24px; font-weight: 800; color: var(--green);">Unavailable</div>
               </div>
               <div id="selectedStockChange" style="font-size: 12px; font-weight: 700; color: var(--green);">+17.40 (+1.42%)</div>
+              <div id="liveQuoteTime" style="font-size:10px;color:var(--text-muted);margin-top:3px;">Waiting for live tick</div>
             </div>
           </div>
 
@@ -1181,4 +1184,5 @@
 
 </body>
 </html>
+
 
