@@ -1,5 +1,5 @@
 // Access plans, private trading journal, and broker-only refresh loop.
-let marketTimer=null, marketGeneration=0, marketOpen=false, marketBusy=false;
+let marketTimer=null, marketGeneration=0, marketOpen=false, marketBusy=false, nextChartRefreshAt=0, livePriceLine=null;
 let lastSnapshot=null, tradeRows=[], tradeOwner=null, accessPlans=[];
 let accessRequestGeneration=0;
 const el=id=>document.getElementById(id);
@@ -10,7 +10,7 @@ function report(id,text){const node=el(id);if(node)node.textContent=text;}
 async function rpc(name,args={}){const {data,error}=await authClient.rpc(name,args);if(error)throw error;return data;}
 async function loadAccessPanel(){
  if(!currentUser)return;
- el('accessPanel').classList.remove('hidden');
+
  report('accessDetails',currentUser.role==='admin'?'Administrator access':('Status: '+currentUser.status+' | Plan: '+(currentUser.plan_code||'None')+' | Expires: '+(currentUser.access_until?new Date(currentUser.access_until).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})+' IST':'Not activated')));
  try{
   const {data,error}=await authClient.from('access_plans').select('*').order('days');if(error)throw error;accessPlans=data;
@@ -25,8 +25,23 @@ function renderPlanSettings(){
  el('planSettings').innerHTML='<h3>Plan prices (INR)</h3><p>Trial: ₹0 / 7 days from admin approval. Paid access starts on approval; renewals extend remaining paid access. Record payment externally before activation.</p>'+accessPlans.filter(p=>p.code!=='trial_7').map(p=>'<div class="plan-setting"><label>'+safe(p.name)+' <input class="form-control" id="price_'+p.code+'" type="number" min="0" step="0.01" value="'+(p.price_inr??'')+'" placeholder="Set price"></label><label><input type="checkbox" id="enabled_'+p.code+'" '+(p.enabled?'checked':'')+'> Enabled</label><button class="btn btn-secondary" onclick="savePlan(&quot;'+p.code+'&quot;)">Save price</button></div>').join('');
 }
 async function savePlan(code){try{const raw=el('price_'+code).value;if(raw==='')throw new Error('Enter a price first');await rpc('admin_set_plan',{p_code:code,p_price:Number(raw),p_enabled:el('enabled_'+code).checked});report('planMessage','Plan saved. Previous payment records keep their original price.');await loadAccessPanel();}catch(e){report('planMessage',e.message);}}
+function openWorkspacePanel(view){
+ if(!currentUser||!hasActiveAccess())return;
+ const isAdmin=currentUser.role==='admin', dashboard=el('appDashboard');
+ el('accessPanel').classList.toggle('hidden',view!=='plans');
+ el('adminControlBar').classList.toggle('hidden',view!=='admin'||!isAdmin);
+ closeAdminSections();
+ dashboard.classList.toggle('hidden',view==='plans'||view==='admin');
+ dashboard.classList.toggle('history-mode',view==='history');
+ el('journalPanel').classList.toggle('hidden',view!=='history');
+ document.querySelectorAll('[data-workspace]').forEach(button=>button.classList.toggle('workspace-active',button.dataset.workspace===view));
+ if(view==='plans')loadAccessPanel();
+ if(view==='history')loadTradeHistory();
+ window.scrollTo({top:0,behavior:'smooth'});
+}
 function openAdminSection(section){
  if(currentUser?.role!=='admin')return;
+ openWorkspacePanel('admin');
  const rights=el('adminRightsPanel'),prices=el('adminPricesPanel');
  rights.classList.toggle('hidden',section!=='rights');prices.classList.toggle('hidden',section!=='prices');
  if(section==='rights')loadAdminUsers();else renderPlanSettings();
@@ -44,7 +59,7 @@ async function loadAdminUsers(){
 }
 async function grantAccess(id){try{await rpc('admin_grant_access',{p_user:id,p_plan:el('grant_'+id).value,p_reference:el('payment_'+id).value.trim()});report('adminMessage','Access activated and recorded.');await loadAdminUsers();}catch(e){report('adminMessage',e.message);}}
 async function revokeAccess(id){try{await rpc('admin_revoke_access',{p_user:id});report('adminMessage','Access revoked. History remains saved.');await loadAdminUsers();}catch(e){report('adminMessage',e.message);}}
-async function viewUserHistory(id){tradeOwner=id;cancelTradeEdit();await loadTradeHistory();el('journalPanel').scrollIntoView({behavior:'smooth'});}
+async function viewUserHistory(id){tradeOwner=id;cancelTradeEdit();openWorkspacePanel('history');await loadTradeHistory();}
 async function ownHistory(){tradeOwner=currentUser.id;cancelTradeEdit();await loadTradeHistory();}
 async function loadTradeHistory(){
  if(!hasActiveAccess())return;
@@ -97,7 +112,7 @@ async function refreshMarket(manual=false){
   if(manual){try{const quoteOnly=await fetchMarket({action:'get_quote',symbol,refresh:true});if(generation!==marketGeneration||symbol!==selectedStock.symbol||!hasActiveAccess())return;marketOpen=!!quoteOnly.market?.isOpen;if(quoteOnly.quote)applyQuote(selectedStock,quoteOnly);const label=marketLabel(quoteOnly);report('marketState',label+' · chart candles unavailable: '+e.message);updateDataFeedBadge(label);return;}catch(quoteError){e=quoteError;}}
   marketOpen=false;setQuoteError(e.message);report('marketState','Data unavailable / last values are stale: '+e.message);updateDataFeedBadge('Data unavailable — no simulated prices');
  }}
- finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
+ finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){nextChartRefreshAt=marketOpen?Date.now()+15000:0;clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
 }
 async function refreshLiveQuote(){
  if(!hasActiveAccess()||marketBusy)return;
@@ -109,15 +124,23 @@ async function refreshLiveQuote(){
   if(!data.paused&&data.quote)applyQuote(selectedStock,data);
   const label=marketLabel(data.paused?{...data,quote:lastSnapshot?.quote}:data);report('marketState',label);updateDataFeedBadge(label);
  }catch(e){if(generation===marketGeneration){marketOpen=false;setQuoteError(e.message);report('marketState','Live quote unavailable: '+e.message);updateDataFeedBadge('Live quote unavailable — no simulated prices');}}
- finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
+ finally{marketBusy=false;if(generation===marketGeneration&&hasActiveAccess()){clearTimeout(marketTimer);marketTimer=setTimeout(()=>marketOpen&&Date.now()>=nextChartRefreshAt?refreshMarket(false):marketOpen?refreshLiveQuote():refreshMarket(false),marketOpen?1000:60000);}}
 }
 function startLivePriceStream(){stopLivePriceStream();refreshMarket(true);}
-function stopLivePriceStream(){marketGeneration++;clearTimeout(marketTimer);marketTimer=null;marketOpen=false;}
+function stopLivePriceStream(){marketGeneration++;clearTimeout(marketTimer);marketTimer=null;marketOpen=false;nextChartRefreshAt=0;}
 function onMarketSelection(){stopLivePriceStream();lastSnapshot=null;clearMarketDisplay();const generation=marketGeneration;function retry(){if(generation!==marketGeneration)return;if(marketBusy){marketTimer=setTimeout(retry,100);return;}refreshMarket(true);}retry();}
 function setQuoteError(message){report('selectedStockPrice','Unavailable');const change=el('selectedStockChange');if(change){change.textContent=message;change.style.color='var(--red)';}}
-function clearMarketDisplay(){currentCandles=[];lastSnapshot=null;for(const series of [candleSeries,volumeSeries,emaSeries,smaSeries,vwapSeries,bbUpperSeries,bbLowerSeries])if(series)series.setData([]);if(candleSeries)for(const line of activeSrLines)candleSeries.removePriceLine(line);activeSrLines=[];document.querySelectorAll('[id^="ind"],[id^="aiBlock"]').forEach(node=>{if(!node.children.length)node.textContent='Awaiting market data';});report('signalBadge','Market data');setQuoteError('Waiting for broker quote');}
-function applyQuote(stock,data){stock.price=data.quote.price;stock.change=data.quote.change;stock.changePercent=data.quote.previousClose>0&&Number.isFinite(stock.change)?(100*stock.change/data.quote.previousClose).toFixed(2):null;stock.quoteTime=data.quote.lastTradeAt;report('selectedStockPrice',money(stock.price));const change=el('selectedStockChange');if(change)change.style.color='var(--green)';report('selectedStockChange',Number.isFinite(stock.change)?money(stock.change)+(stock.changePercent!==null?' ('+stock.changePercent+'%)':''):'Change unavailable');renderSharesList();populateQuickStockDropdown();}
+function clearMarketDisplay(){currentCandles=[];lastSnapshot=null;for(const series of [candleSeries,volumeSeries,emaSeries,smaSeries,vwapSeries,bbUpperSeries,bbLowerSeries])if(series)series.setData([]);if(candleSeries&&livePriceLine){try{candleSeries.removePriceLine(livePriceLine);}catch{}livePriceLine=null;}if(candleSeries)for(const line of activeSrLines)candleSeries.removePriceLine(line);activeSrLines=[];document.querySelectorAll('[id^="ind"],[id^="aiBlock"]').forEach(node=>{if(!node.children.length)node.textContent='Awaiting market data';});report('signalBadge','Market data');setQuoteError('Waiting for broker quote');}
+function applyQuote(stock,data){stock.price=data.quote.price;stock.change=data.quote.change;stock.changePercent=data.quote.previousClose>0&&Number.isFinite(stock.change)?(100*stock.change/data.quote.previousClose).toFixed(2):null;stock.quoteTime=data.quote.lastTradeAt;if(candleSeries&&Number.isFinite(stock.price)){if(livePriceLine){try{candleSeries.removePriceLine(livePriceLine);}catch{}}livePriceLine=candleSeries.createPriceLine({price:stock.price,color:'rgb(0,229,255)',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'Live LTP'});}report('selectedStockPrice',money(stock.price));const change=el('selectedStockChange');if(change)change.style.color='var(--green)';report('selectedStockChange',Number.isFinite(stock.change)?money(stock.change)+(stock.changePercent!==null?' ('+stock.changePercent+'%)':''):'Change unavailable');renderSharesList();populateQuickStockDropdown();}
 setInterval(async()=>{
  if(!currentUser||!authClient)return;const userId=currentUser.id;const wasActive=hasActiveAccess();
  try{const {data,error}=await authClient.from('app_users').select('*').eq('id',currentUser.id).single();if(error)throw error;if(currentUser?.id!==userId)return;currentUser=data;if(!hasActiveAccess()){stopLivePriceStream();clearMarketDisplay();tradeRows=[];el('tradeTableBody').innerHTML='';el('holdingsBody').innerHTML='';showView('pending');report('pendingMessage','Access expired, revoked or awaiting admin activation. Request a plan below.');}else if(!wasActive){await checkActiveStatus();}await loadAccessPanel();}catch{stopLivePriceStream();showView('auth');}
 },60000);
+
+
+
+
+
+
+
+

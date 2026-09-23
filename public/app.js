@@ -131,6 +131,7 @@ let upstoxWebSocket = null;
 let wsReconnectTimeout = null;
 let priceAlerts = []; // Legacy device-global alerts are disabled.
 let currentStockSearchQuery = "";
+let remoteNseMatches = [], remoteNseSearchComplete = false, stockSearchTimer = null, stockSearchRequest = 0;
 let currentChartMode = "custom";
 
 // Initialize on load (handle both interactive/complete and DOMContentLoaded)
@@ -274,17 +275,12 @@ async function checkActiveStatus() {
 
   if (hasActiveAccess()) {
     showView("dashboard");
+    document.getElementById("workspaceNav").classList.remove("hidden");
+    document.getElementById("adminNavButton").classList.toggle("hidden", currentUser.role !== "admin");
     tradeOwner = currentUser.id;
     cancelTradeEdit();
     loadTradeHistory();
-    if (currentUser.role === "admin") {
-      document.getElementById("adminControlBar").classList.remove("hidden");
-      closeAdminSections();
-      loadAdminUsers();
-    } else {
-      document.getElementById("adminControlBar").classList.add("hidden");
-      closeAdminSections();
-    }
+    openWorkspacePanel("dashboard");
 
     // Defer chart canvas initialization until after the dashboard view is fully displayed and measured
     requestAnimationFrame(() => {
@@ -292,6 +288,8 @@ async function checkActiveStatus() {
     });
   } else {
     stopLivePriceStream();
+    document.getElementById("workspaceNav").classList.add("hidden");
+    document.getElementById("accessPanel").classList.remove("hidden");
     showView("pending");
     document.getElementById("pendingMessage").innerText =
       `Hello ${currentUser.full_name}. Access is pending, expired, or revoked. Request a plan below; administrator approval is required.`;
@@ -337,57 +335,30 @@ function onQuickStockSelect(sym) {
 function handleStockSearch(query) {
   currentStockSearchQuery = (query || "").trim().toLowerCase();
   const clearBtn = document.getElementById("clearStockSearchBtn");
-  if (clearBtn) {
-    clearBtn.classList.toggle("hidden", currentStockSearchQuery.length === 0);
+  if (clearBtn) clearBtn.classList.toggle("hidden", currentStockSearchQuery.length === 0);
+  clearTimeout(stockSearchTimer); remoteNseMatches=[]; remoteNseSearchComplete=false;
+  if (currentStockSearchQuery.length >= 2 && currentUser && hasActiveAccess()) {
+    const request=++stockSearchRequest;
+    stockSearchTimer=setTimeout(()=>searchNseEquities(currentStockSearchQuery,request),280);
   }
   renderSharesList();
 }
-
+async function searchNseEquities(query,request){
+  try{const data=await fetchMarket({action:'search_instruments',query});if(request!==stockSearchRequest||query!==currentStockSearchQuery)return;remoteNseMatches=(data.instruments||[]).map(x=>({symbol:x.symbol,name:x.name||x.symbol,tvSymbol:`NSE:${x.symbol}`,instrumentKey:x.instrumentKey,price:NaN,change:NaN,changePercent:null}));remoteNseSearchComplete=true;renderSharesList();}catch(e){if(request===stockSearchRequest){remoteNseMatches=[];remoteNseSearchComplete=true;renderSharesList();}}
+}
 function handleStockSearchEnter() {
-  const input = document.getElementById("stockSearchInput");
-  if (!input) return;
-  const q = input.value.trim();
+  const q = document.getElementById("stockSearchInput")?.value.trim();
   if (!q) return;
-
-  // Exact or partial match in existing STOCKS
-  const exactMatch = STOCKS.find(s => s.symbol.toLowerCase() === q.toLowerCase());
-  if (exactMatch) {
-    selectStock(exactMatch);
-    return;
-  }
-  const partialMatch = STOCKS.find(s => s.symbol.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase()));
-  if (partialMatch) {
-    selectStock(partialMatch);
-    return;
-  }
-
-  // Dynamic Indian Stock Search directly to live NSE
-  addAndSelectCustomStock(q);
+  const exact=STOCKS.find(s=>s.symbol.toLowerCase()===q.toLowerCase())||remoteNseMatches.find(s=>s.symbol.toLowerCase()===q.toLowerCase());
+  if(exact){selectStock(exact);clearStockSearch();return;}
+  handleStockSearch(q);
 }
-
-function addAndSelectCustomStock(symbolInput) {
-  const sym = symbolInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!sym) return;
-
-  let existing = STOCKS.find(s => s.symbol === sym || s.tvSymbol === `NSE:${sym}`);
-  if (existing) {
-    selectStock(existing);
-    clearStockSearch();
-    return;
-  }
-
-  const newStock = { symbol: sym, name: sym, tvSymbol: `NSE:${sym}`, price: NaN, change: NaN, changePercent: null };
-  STOCKS.unshift(newStock);
-  populateQuickStockDropdown();
-  clearStockSearch();
-  selectStock(newStock);
-}
-
+function selectNseSearchResult(index){const result=remoteNseMatches[index];if(!result)return;let stock=STOCKS.find(s=>s.symbol===result.symbol);if(!stock){stock=result;STOCKS.unshift(stock);}selectStock(stock);populateQuickStockDropdown();clearStockSearch();}
+function addAndSelectCustomStock(symbolInput){handleStockSearch(symbolInput);}
 function clearStockSearch() {
+  clearTimeout(stockSearchTimer);stockSearchRequest++;remoteNseMatches=[];remoteNseSearchComplete=false;
   const input = document.getElementById("stockSearchInput");
-  if (input) {
-    input.value = "";
-  }
+  if (input) input.value = "";
   currentStockSearchQuery = "";
   const clearBtn = document.getElementById("clearStockSearchBtn");
   if (clearBtn) clearBtn.classList.add("hidden");
@@ -400,33 +371,13 @@ function renderSharesList() {
   if (!container) return;
   container.innerHTML = "";
 
-  const filteredStocks = STOCKS.filter(stock => {
-    if (!currentStockSearchQuery) return true;
-    const matchSymbol = stock.symbol.toLowerCase().includes(currentStockSearchQuery);
-    const matchName = stock.name.toLowerCase().includes(currentStockSearchQuery);
-    return matchSymbol || matchName;
-  });
-
+  const localMatches = STOCKS.filter(stock => !currentStockSearchQuery || stock.symbol.toLowerCase().includes(currentStockSearchQuery) || stock.name.toLowerCase().includes(currentStockSearchQuery));
+  const filteredStocks = currentStockSearchQuery.length>=2 && remoteNseMatches.length ? remoteNseMatches : localMatches;
   if (filteredStocks.length === 0) {
-    const cleanQ = currentStockSearchQuery.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    container.innerHTML = `
-      <div style="text-align: center; padding: 18px 10px; color: var(--text-muted); font-size: 13px;">
-        <i class="fa-solid fa-circle-exclamation" style="font-size: 22px; color: var(--amber); margin-bottom: 8px; display: block;"></i>
-        <span>"${escapeHtml(currentStockSearchQuery)}" is not in the preset list</span>
-      </div>
-      ${cleanQ ? `
-        <div class="direct-search-banner" onclick="addAndSelectCustomStock('${cleanQ}')">
-          <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
-            <i class="fa-solid fa-bolt" style="color:var(--cyan); font-size:14px;"></i>
-            <span style="font-weight:700; color:var(--cyan);">Open NSE:${cleanQ} broker chart</span>
-          </div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Load through the authenticated broker data service</div>
-        </div>
-      ` : ''}
-    `;
+    const state=remoteNseSearchComplete?'No NSE equity found for this search. Try the exchange trading symbol or company name.':'Searching the NSE equity directory…';
+    container.innerHTML=`<div style="text-align:center;padding:18px 10px;color:var(--text-muted);font-size:13px;"><i class="fa-solid fa-magnifying-glass" style="font-size:22px;color:var(--cyan);margin-bottom:8px;display:block;"></i><span>${escapeHtml(state)}</span></div>`;
     return;
   }
-
   filteredStocks.forEach(stock => {
     const isPositive = stock.change >= 0;
     const isSelected = stock.symbol === selectedStock.symbol;
@@ -2135,6 +2086,7 @@ async function logout() {
   document.getElementById("tradeTableBody").innerHTML = "";
   document.getElementById("holdingsBody").innerHTML = "";
   document.getElementById("userHeader").classList.add("hidden");
+  document.getElementById("workspaceNav")?.classList.add("hidden");
   showView("auth");
 }
 
@@ -2143,3 +2095,7 @@ function showView(view) {
   document.getElementById("pendingGate").classList.toggle("hidden", view !== "pending");
   document.getElementById("appDashboard").classList.toggle("hidden", view !== "dashboard");
 }
+
+
+
+

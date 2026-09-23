@@ -3,7 +3,7 @@ const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'au
 function reply(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});}
 let instruments: any[]=[];
 let instrumentsAt=0;
-async function resolveInstrument(symbol:string){
+async function loadInstruments(){
  if(Date.now()-instrumentsAt>12*3600000 || !instruments.length){
   const r=await fetch('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz',{signal:AbortSignal.timeout(20000)});
   if(!r.ok) throw new Error('Instrument directory unavailable');
@@ -13,9 +13,16 @@ async function resolveInstrument(symbol:string){
   if(!Array.isArray(rows)) throw new Error('Invalid instrument directory');
   instruments=rows.filter((x:any)=>x.segment==='NSE_EQ' && x.instrument_type==='EQ'); instrumentsAt=Date.now();
  }
- const item=instruments.find((x:any)=>x.trading_symbol===symbol);
+ return instruments;
+}
+async function resolveInstrument(symbol:string){
+ const item=(await loadInstruments()).find((x:any)=>x.trading_symbol===symbol);
  if(!item?.instrument_key) throw new Error('NSE equity symbol not found; use the current exchange symbol');
  return item;
+}
+async function searchInstruments(query:string){
+ const term=query.trim().toUpperCase();if(term.length<2)return [];
+ return (await loadInstruments()).filter((x:any)=>String(x.trading_symbol||'').toUpperCase().includes(term)||String(x.name||x.short_name||'').toUpperCase().includes(term)).slice(0,50).map((x:any)=>({symbol:x.trading_symbol,name:x.name||x.short_name||x.trading_symbol,instrumentKey:x.instrument_key,exchange:'NSE'}));
 }
 function istDate(ms=Date.now()){return new Date(ms+19800000).toISOString().slice(0,10);}
 function normalize(rows:any[],daily:boolean){
@@ -45,9 +52,10 @@ Deno.serve(async(req:Request)=>{
   let body;try{body=await req.json();}catch{return reply({message:'Invalid JSON'},400);}
   if(!body||typeof body!=='object'||Array.isArray(body))return reply({message:'Invalid request'},400);
   const action=body.action||'get_snapshot';
-  if(!['ping','get_snapshot','get_candles','get_quote','market_status'].includes(action))return reply({message:'Unsupported action'},400);
+  if(!['ping','search_instruments','get_snapshot','get_candles','get_quote','market_status'].includes(action))return reply({message:'Unsupported action'},400);
   const token=Deno.env.get('UPSTOX_ACCESS_TOKEN');
   if(action==='ping')return reply({status:'success',source:'upstox',configured:!!token});
+  if(action==='search_instruments'){const query=typeof body.query==='string'?body.query:'';return reply({status:'success',source:'upstox',instruments:await searchInstruments(query)});}
   if(!token)return reply({message:'Admin must configure UPSTOX_ACCESS_TOKEN in Supabase secrets'},503);
   async function broker(path:string){
    const res=await fetch('https://api.upstox.com'+path,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(15000)});
@@ -107,3 +115,5 @@ Deno.serve(async(req:Request)=>{
    candleAsOf:candles.at(-1)?.time,intervalSeconds:15});
  }catch(error){return reply({message:error instanceof Error?error.message:'Market data unavailable'},502);}
 });
+
+

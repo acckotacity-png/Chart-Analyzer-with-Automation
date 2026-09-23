@@ -42,15 +42,13 @@
     .brand i { font-size: 20px; }
 
     .user-pill {
-      background: var(--card-elevated);
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      border: 1px solid var(--border);
+      background: var(--card-elevated); padding: 6px 14px; border-radius: 20px; font-size: 12px;
+      display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); flex-wrap: wrap; justify-content: flex-end;
     }
+    .workspace-nav { display:flex; gap:6px; flex-wrap:wrap; }
+    .workspace-nav .btn { padding:4px 9px; font-size:11px; }
+    .workspace-active { background:var(--cyan)!important; color:#000!important; border-color:var(--cyan)!important; }
+    #appDashboard.history-mode > :not(#journalPanel) { display:none!important; }
     .badge {
       font-size: 10px;
       font-weight: 800;
@@ -588,6 +586,12 @@
     <div id="userHeader" class="user-pill hidden">
       <span id="headerUserName">User</span>
       <span id="headerUserStatus" class="badge approved">Approved</span>
+      <div id="workspaceNav" class="workspace-nav hidden">
+        <button class="btn btn-secondary workspace-active" data-workspace="dashboard" onclick="openWorkspacePanel('dashboard')"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
+        <button class="btn btn-secondary" data-workspace="plans" onclick="openWorkspacePanel('plans')"><i class="fa-solid fa-id-card"></i> Plans</button>
+        <button class="btn btn-secondary" data-workspace="history" onclick="openWorkspacePanel('history')"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+        <button id="adminNavButton" class="btn btn-secondary hidden" data-workspace="admin" onclick="openWorkspacePanel('admin')"><i class="fa-solid fa-user-shield"></i> Administration</button>
+      </div>
       <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="logout()">
         <i class="fa-solid fa-right-from-bracket"></i> Logout
       </button>
@@ -684,17 +688,17 @@
       </div>
     </section>
     <section id="adminRightsPanel" class="card hidden" style="border-color:var(--cyan); margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-user-shield"></i> User rights & access</h2><div><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="loadAdminUsers()"><i class="fa-solid fa-rotate"></i> Refresh</button> <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="closeAdminSections()">Back to dashboard</button></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-user-shield"></i> User rights & access</h2><div><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="loadAdminUsers()"><i class="fa-solid fa-rotate"></i> Refresh</button> <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="openWorkspacePanel('dashboard')">Back to dashboard</button></div></div>
       <p>Approve trials and paid plans, extend access, revoke access, and review saved trades.</p><p id="adminMessage" aria-live="polite"></p>
       <div style="overflow-x:auto;"><table class="user-table"><thead><tr><th>User details</th><th>Mobile</th><th>Status</th><th>Action</th></tr></thead><tbody id="userTableBody"></tbody></table></div>
     </section>
     <section id="adminPricesPanel" class="card hidden" style="border-color:var(--cyan); margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-indian-rupee-sign"></i> Plan prices</h2><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="closeAdminSections()">Back to dashboard</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><h2><i class="fa-solid fa-indian-rupee-sign"></i> Plan prices</h2><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="openWorkspacePanel('dashboard')">Back to dashboard</button></div>
       <div id="planSettings"></div><p id="planMessage" aria-live="polite"></p>
     </section>
 <div id="appDashboard" class="hidden">
  <section class="card"><strong id="marketState" aria-live="polite">Awaiting broker connection</strong><p>Prices show the last exchange trade time. Market closed / status unavailable: automatic chart updates pause. Manual refresh fetches the last available broker data.</p></section>
-<section class="card" id="journalPanel">
+<section class="card hidden" id="journalPanel">
  <h2>My trades & history</h2><p id="journalOwner"></p><p>Record purchases and sales you made with your broker. This form does not place orders.</p>
  <form id="tradeForm" onsubmit="saveTrade(event)">
  <input type="hidden" id="tradeId">
@@ -1177,3 +1181,4 @@
 
 </body>
 </html>
+
